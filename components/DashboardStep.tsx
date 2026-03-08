@@ -346,7 +346,16 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     <span className="material-symbols-outlined text-primary">group</span>
                                 </div>
                                 <div className="flex flex-col flex-1">
-                                    <h3 className="text-lg font-bold text-white">Clan de Remitentes</h3>
+                                    <div className="flex items-center gap-2 relative group/tooltip w-fit">
+                                        <h3 className="text-lg font-bold text-white">Clan de Remitentes</h3>
+                                        <span className="material-symbols-outlined text-[16px] text-slate-500 cursor-help hover:text-primary transition-colors">info</span>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50">
+                                            <div className="bg-slate-800 border border-slate-700 text-xs text-slate-300 p-3 rounded-xl shadow-xl text-center">
+                                                Correos agrupados por quién te los envía. Ideal para borrar suscripciones pesadas de un plumazo.
+                                            </div>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>
+                                        </div>
+                                    </div>
                                     <span className="text-xs text-slate-400 font-normal">Newsletters masivas detectadas</span>
                                 </div>
                             </div>
@@ -403,7 +412,16 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     <span className="material-symbols-outlined text-amber-500">history</span>
                                 </div>
                                 <div className="flex flex-col flex-1">
-                                    <h3 className="text-lg font-bold text-white">Pueblos Fantasma</h3>
+                                    <div className="flex items-center gap-2 relative group/tooltip w-fit">
+                                        <h3 className="text-lg font-bold text-white">Pueblos Fantasma</h3>
+                                        <span className="material-symbols-outlined text-[16px] text-slate-500 cursor-help hover:text-amber-500 transition-colors">info</span>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50">
+                                            <div className="bg-slate-800 border border-slate-700 text-xs text-slate-300 p-3 rounded-xl shadow-xl text-center">
+                                                Correos agrupados por el año en que los recibiste. Perfecto para hacer limpieza histórica.
+                                            </div>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>
+                                        </div>
+                                    </div>
                                     <span className="text-xs text-slate-400 font-normal">Correos de hace más de 2 años</span>
                                 </div>
                             </div>
@@ -460,7 +478,16 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     <span className="material-symbols-outlined text-indigo-400">mail_lock</span>
                                 </div>
                                 <div className="flex flex-col flex-1">
-                                    <h3 className="text-lg font-bold text-white">Hub de Desuscripción</h3>
+                                    <div className="flex items-center gap-2 relative group/tooltip w-fit">
+                                        <h3 className="text-lg font-bold text-white">Hub de Desuscripción</h3>
+                                        <span className="material-symbols-outlined text-[16px] text-slate-500 cursor-help hover:text-teal-400 transition-colors">info</span>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50">
+                                            <div className="bg-slate-800 border border-slate-700 text-xs text-slate-300 p-3 rounded-xl shadow-xl text-center">
+                                                Detectamos las Newsletters y te damos el botón directo para darte de baja.
+                                            </div>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>
+                                        </div>
+                                    </div>
                                     <span className="text-xs text-slate-400 font-normal">Correos comerciales y promociones</span>
                                 </div>
                             </div>

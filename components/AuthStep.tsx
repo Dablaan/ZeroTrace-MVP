@@ -121,7 +121,25 @@ export default function AuthStep({ onConnect, isLoading, error, progress = 0, su
                                 </div>
 
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-slate-300 text-sm font-semibold ml-1">Contraseña de Aplicación</label>
+                                    <div className="flex items-center gap-2 relative group/tooltip w-fit">
+                                        <label className="text-slate-300 text-sm font-semibold ml-1">Contraseña de Aplicación</label>
+                                        <span className="material-symbols-outlined text-[16px] text-slate-500 cursor-help hover:text-primary transition-colors">info</span>
+
+                                        {/* Dynamic Tooltip */}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50">
+                                            <div className="bg-slate-800 border border-slate-700 text-xs text-slate-300 p-3 rounded-xl shadow-xl">
+                                                {email.includes('@gmail.com') ? (
+                                                    <span>Necesitas una contraseña de aplicación de Google. <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>
+                                                ) : email.includes('@outlook') || email.includes('@hotmail') ? (
+                                                    <span>Necesitas una contraseña de aplicación de Microsoft. <a href="https://account.live.com/proofs/manage/additional" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>
+                                                ) : (
+                                                    <span>Usa la contraseña de aplicación generada en la configuración de seguridad de tu proveedor de correo.</span>
+                                                )}
+                                            </div>
+                                            {/* Tooltip Arrow */}
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>
+                                        </div>
+                                    </div>
                                     <div className="relative group">
                                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-primary transition-colors">
                                             <span className="material-symbols-outlined text-xl">key</span>
