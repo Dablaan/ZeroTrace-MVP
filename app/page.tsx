@@ -51,11 +51,11 @@ export default function Home() {
         setStep("dashboard");
         setIsLoading(false);
       }, 800);
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearInterval(progressInterval);
       setProgress(0);
       setIsLoading(false);
-      setError(err.message || "Credenciales incorrectas o cuenta no soportada");
+      setError(err instanceof Error ? err.message : "Credenciales incorrectas o cuenta no soportada");
     }
   };
 

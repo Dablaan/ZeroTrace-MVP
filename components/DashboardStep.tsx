@@ -50,7 +50,6 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
     const [unsubscribedIds, setUnsubscribedIds] = useState<Set<string>>(new Set());
-    const [noUnsubIds, setNoUnsubIds] = useState<Set<string>>(new Set());
     const [savedUnsubsCount, setSavedUnsubsCount] = useState(0);
     const [showSummary, setShowSummary] = useState(false);
     const [sessionStats, setSessionStats] = useState({ mails: 0, bytes: 0 });
@@ -74,7 +73,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
     const getNameFromEmail = (email: string) => {
         if (!email || !email.includes('@')) return 'Desconocido';
         const domainParts = email.split('@')[1].split('.');
-        let name = domainParts.length > 2 ? domainParts[domainParts.length - 2] : domainParts[0];
+        const name = domainParts.length > 2 ? domainParts[domainParts.length - 2] : domainParts[0];
         return name.charAt(0).toUpperCase() + name.slice(1);
     };
 
@@ -107,7 +106,6 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
 
         if (!headerString) {
             setToast("Este remitente oculta su baja. Selecciónalo y bórralo manualmente.");
-            setNoUnsubIds(prev => new Set(prev).add(item.email));
             return;
         }
 
@@ -124,7 +122,6 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             setUnsubscribedIds(prev => new Set(prev).add(item.email));
         } else {
             setToast("Formato de baja no reconocido. Bórralo manualmente.");
-            setNoUnsubIds(prev => new Set(prev).add(item.email));
         }
     };
 
@@ -144,7 +141,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             return acc;
         }, 0);
 
-        let uidsToDelete: number[] = [];
+        const uidsToDelete: number[] = [];
 
         selectedItems.forEach(id => {
             if (id.startsWith("clan-")) {
@@ -180,9 +177,9 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             if (!response.ok) throw new Error(result.error);
 
             // Remove deleted items from local state
-            const newClan = localData.clan.filter((_, index) => !selectedItems.includes(`clan-${index}`));
-            const newPueblos = localData.pueblos.filter((_, index) => !selectedItems.includes(`pueblo-${index}`));
-            const newHub = localData.hub.filter((_, index) => !selectedItems.includes(`hub-${index}`));
+            const newClan = localData.clan.filter((item, index) => !selectedItems.includes(`clan-${index}`));
+            const newPueblos = localData.pueblos.filter((item, index) => !selectedItems.includes(`pueblo-${index}`));
+            const newHub = localData.hub.filter((item, index) => !selectedItems.includes(`hub-${index}`));
 
             setLocalData({ ...localData, clan: newClan, pueblos: newPueblos, hub: newHub });
             setSelectedItems([]);

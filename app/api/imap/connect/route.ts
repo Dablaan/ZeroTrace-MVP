@@ -56,7 +56,7 @@ export async function POST(request: Request) {
         const lock = await client.getMailboxLock('INBOX');
         let totalMessages = 0;
         try {
-            totalMessages = client.mailbox.exists;
+            totalMessages = typeof client.mailbox !== 'boolean' ? client.mailbox.exists : 0;
             console.log("-> Total INBOX messages:", totalMessages);
         } finally {
             lock.release();
@@ -72,14 +72,14 @@ export async function POST(request: Request) {
             totalMessages
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         // Ensure client is closed to prevent memory leaks if something failed
         if (client) {
             client.close();
             client = null;
         }
 
-        const errMessage = error.message || String(error);
+        const errMessage = error instanceof Error ? error.message : String(error);
         console.log("-> Error in IMAP connection:", errMessage);
 
         // Map authentication failures to 401

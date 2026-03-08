@@ -72,13 +72,13 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ success: true, count: uids.length });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         if (client) {
             client.close();
             client = null;
         }
 
-        const errMessage = error.message || String(error);
+        const errMessage = error instanceof Error ? error.message : String(error);
         if (errMessage.toLowerCase().includes('authentication') || errMessage.toLowerCase().includes('login failed')) {
             return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
         }

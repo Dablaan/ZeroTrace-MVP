@@ -141,7 +141,7 @@ export async function POST(request: Request) {
                 }
 
                 // 2. PUEBLOS FANTASMAS: Identificar correos de más de 2 años (Previos a 2022)
-                let msgDate = new Date(dateHeader);
+                const msgDate = new Date(dateHeader);
                 if (!isNaN(msgDate.getTime()) && msgDate < twoYearsAgo) {
                     pueblosFantasmasMap.set(uid, {
                         email: fromEmail,
@@ -175,7 +175,7 @@ export async function POST(request: Request) {
 
         // Limpiar Maps de O(N) a Arrays para el cliente
         const clanArray: ClanRemitente[] = Array.from(remitentesMap.entries())
-            .filter(([_, data]) => data.count > 2)
+            .filter(([, data]) => data.count > 2)
             .map(([email, data]) => ({ email, count: data.count, uids: data.uids, sizeBytes: data.sizeBytes }))
             .sort((a, b) => b.count - a.count);
 
@@ -186,13 +186,13 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ clan: clanArray, pueblos: pueblosArray, hub: hubArray });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         if (client) {
             client.close();
             client = null;
         }
 
-        const errMessage = error.message || String(error);
+        const errMessage = error instanceof Error ? error.message : String(error);
         if (errMessage.toLowerCase().includes('authentication') || errMessage.toLowerCase().includes('login failed')) {
             return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
         }
