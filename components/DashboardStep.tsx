@@ -99,6 +99,15 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
         );
     };
 
+    const getUnsubscribeLinks = (headerStr: string) => {
+        if (!headerStr) return { httpLink: null, mailtoLink: null, hasValidLink: false };
+        // Extraer todo dentro de los < >
+        const links = headerStr.match(/<(.*?)>/g)?.map((m: string) => m.slice(1, -1)) || [];
+        const httpLink = links.find((l: string) => l.startsWith('http')) || null;
+        const mailtoLink = links.find((l: string) => l.startsWith('mailto:')) || null;
+        return { httpLink, mailtoLink, hasValidLink: !!(httpLink || mailtoLink) };
+    };
+
     const handleUnsubscribeClick = (item: HubDesuscripcion) => {
         const headerString = item.listUnsubscribe; // O la propiedad exacta que venga del backend
 
@@ -107,16 +116,13 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             return;
         }
 
-        // Extraer todo lo que esté entre < y >
-        const links = headerString.match(/<(.*?)>/g)?.map((match: string) => match.slice(1, -1)) || [];
-        const httpLink = links.find((l: string) => l.startsWith('http'));
-        const mailtoLink = links.find((l: string) => l.startsWith('mailto:'));
+        const { httpLink, mailtoLink, hasValidLink } = getUnsubscribeLinks(headerString);
 
         if (httpLink) {
             window.open(httpLink, '_blank');
             setUnsubscribedIds(prev => new Set(prev).add(item.email));
         } else if (mailtoLink) {
-            window.open(mailtoLink, '_self');
+            window.location.href = mailtoLink;
             setUnsubscribedIds(prev => new Set(prev).add(item.email));
         } else {
             setToast("Formato de baja no reconocido. Bórralo manualmente.");
@@ -462,8 +468,8 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                 <div className="space-y-1">
                                     {localData.hub.map((item, index) => {
                                         const id = `hub-${index}`;
-                                        const hasUnsubscribe = !!item.listUnsubscribe;
-                                        const isUnsubscribed = hasUnsubscribe && unsubscribedIds.has(item.email);
+                                        const { hasValidLink } = getUnsubscribeLinks(item.listUnsubscribe);
+                                        const isUnsubscribed = hasValidLink && unsubscribedIds.has(item.email);
                                         return (
                                             <label key={item.email} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex flex-col flex-1 pr-4 min-w-0">
@@ -477,15 +483,15 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                                 <div className="flex items-center gap-3 ml-4">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleUnsubscribeClick(item); }}
-                                                        disabled={!hasUnsubscribe || isUnsubscribed}
-                                                        className={`px-4 py-2 text-sm font-bold rounded-xl transition-colors border flex-shrink-0 ${!hasUnsubscribe
+                                                        disabled={!hasValidLink || isUnsubscribed}
+                                                        className={`px-4 py-2 text-sm font-bold rounded-xl transition-colors border flex-shrink-0 ${!hasValidLink
                                                             ? 'bg-slate-800 text-slate-500 cursor-not-allowed border-none'
                                                             : isUnsubscribed
                                                                 ? 'bg-green-500/20 text-green-400 border-green-500/30'
                                                                 : 'bg-slate-700 hover:bg-slate-600 text-white border-white/5'
                                                             }`}
                                                     >
-                                                        {!hasUnsubscribe ? "Baja manual" : isUnsubscribed ? "Desuscrito ✓" : "Desuscribir"}
+                                                        {!hasValidLink ? "Sin baja" : isUnsubscribed ? "Desuscrito ✓" : "Desuscribir"}
                                                     </button>
                                                     <input
                                                         type="checkbox"
