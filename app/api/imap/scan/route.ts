@@ -109,7 +109,7 @@ export async function POST(request: Request) {
                 if (message.headers && message.headers instanceof Buffer) {
                     headersStr = message.headers.toString('utf-8');
                 } else if (message.headers && typeof message.headers === 'object') {
-                    try { headersStr = JSON.stringify(message.headers); } catch (e) { }
+                    try { headersStr = JSON.stringify(message.headers); } catch { }
                 }
 
                 if (!headersStr) continue;

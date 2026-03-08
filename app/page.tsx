@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import AuthStep from "@/components/AuthStep";
-import DashboardStep from "@/components/DashboardStep";
+import DashboardStep, { ScanData } from "@/components/DashboardStep";
 
 export default function Home() {
   const [step, setStep] = useState<"auth" | "dashboard">("auth");
@@ -10,7 +10,7 @@ export default function Home() {
   const [credentials, setCredentials] = useState({ email: "", appPassword: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scanData, setScanData] = useState<any>(null); // We will pass this to DashboardStep
+  const [scanData, setScanData] = useState<ScanData | null>(null); // We will pass this to DashboardStep
   const [progress, setProgress] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -94,7 +94,7 @@ export default function Home() {
       ) : (
         <DashboardStep
           onBack={handleBack}
-          scanData={scanData}
+          scanData={scanData as ScanData}
           credentials={credentials}
           onRefresh={handleRefresh}
           isRefreshing={isLoading}

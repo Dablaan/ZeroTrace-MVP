@@ -26,7 +26,7 @@ interface HubDesuscripcion {
     sizeBytes: number;
 }
 
-interface ScanData {
+export interface ScanData {
     clan: ClanRemitente[];
     pueblos: PuebloFantasma[];
     hub: HubDesuscripcion[];
@@ -99,9 +99,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
         );
     };
 
-    const handleUnsubscribeClick = (e: React.MouseEvent, item: HubDesuscripcion) => {
-        e.stopPropagation(); // Bloquear acordeón
-
+    const handleUnsubscribeClick = (item: HubDesuscripcion) => {
         const headerString = item.listUnsubscribe; // O la propiedad exacta que venga del backend
 
         if (!headerString) {
@@ -478,7 +476,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                                 </div>
                                                 <div className="flex items-center gap-3 ml-4">
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); handleUnsubscribeClick(e, item); }}
+                                                        onClick={(e) => { e.stopPropagation(); handleUnsubscribeClick(item); }}
                                                         disabled={!hasUnsubscribe || isUnsubscribed}
                                                         className={`px-4 py-2 text-sm font-bold rounded-xl transition-colors border flex-shrink-0 ${!hasUnsubscribe
                                                             ? 'bg-slate-800 text-slate-500 cursor-not-allowed border-none'
