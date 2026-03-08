@@ -127,7 +127,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             return;
         }
 
-        const { httpLink, mailtoLink, hasValidLink } = getUnsubscribeLinks(headerString);
+        const { httpLink, mailtoLink } = getUnsubscribeLinks(headerString);
 
         if (httpLink) {
             window.open(httpLink, '_blank');
