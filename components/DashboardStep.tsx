@@ -99,7 +99,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
         );
     };
 
-    const getUnsubscribeLinks = (headerStr: string) => {
+    const getUnsubscribeLinks = (headerStr: string | null | undefined) => {
         if (!headerStr) return { httpLink: null, mailtoLink: null, hasValidLink: false };
         // Extraer todo dentro de los < >
         const links = headerStr.match(/<(.*?)>/g)?.map((m: string) => m.slice(1, -1)) || [];
