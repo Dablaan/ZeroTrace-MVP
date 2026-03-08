@@ -7,6 +7,7 @@ interface ClanRemitente {
     email: string;
     count: number;
     uids: number[];
+    sizeBytes: number;
 }
 
 interface PuebloFantasma {
@@ -14,13 +15,15 @@ interface PuebloFantasma {
     subject: string;
     date: string;
     uid: number;
+    sizeBytes: number;
 }
 
 interface HubDesuscripcion {
     name: string;
     email: string;
     unsubscribeUrl: string;
-    uid: number;
+    uids: number[];
+    sizeBytes: number;
 }
 
 interface ScanData {
@@ -35,9 +38,10 @@ interface DashboardStepProps {
     credentials: { email: string; appPassword: string };
     onRefresh: () => void;
     isRefreshing: boolean;
+    onLogout: () => void;
 }
 
-export default function DashboardStep({ onBack, scanData, credentials, onRefresh, isRefreshing }: DashboardStepProps) {
+export default function DashboardStep({ onBack, scanData, credentials, onRefresh, isRefreshing, onLogout }: DashboardStepProps) {
     // Estado inicial en null: Todos los paneles colapsados por defecto
     const [openPanel, setOpenPanel] = useState<string | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -45,10 +49,42 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
     const [localData, setLocalData] = useState<ScanData>(scanData);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+    const [unsubscribedIds, setUnsubscribedIds] = useState<string[]>([]);
+    const [noUnsubscribeIds, setNoUnsubscribeIds] = useState<string[]>([]);
+    const [showSummary, setShowSummary] = useState(false);
+    const [sessionStats, setSessionStats] = useState({ mails: 0, bytes: 0 });
+    const [toast, setToast] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
+
+    const formatBytes = (bytes: number) => {
+        if (!bytes || bytes === 0) return '0 KB';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const getNameFromEmail = (email: string) => {
+        if (!email || !email.includes('@')) return 'Desconocido';
+        const domainParts = email.split('@')[1].split('.');
+        let name = domainParts.length > 2 ? domainParts[domainParts.length - 2] : domainParts[0];
+        return name.charAt(0).toUpperCase() + name.slice(1);
+    };
 
     // Sync updated data when scanData prop changes via Refresh
     useEffect(() => {
-        setLocalData(scanData);
+        const sortedData = {
+            clan: [...scanData.clan].sort((a, b) => b.count - a.count),
+            pueblos: [...scanData.pueblos].sort((a, b) => b.sizeBytes - a.sizeBytes),
+            hub: [...scanData.hub].sort((a, b) => b.uids.length - a.uids.length)
+        };
+        setLocalData(sortedData);
     }, [scanData]);
 
     const handleTogglePanel = (panel: string) => {
@@ -63,15 +99,47 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
         );
     };
 
-    const handleUnsubscribeClick = (e: React.MouseEvent, name: string) => {
-        // Prevent event bubbling to the accordion
+    const handleUnsubscribeClick = (e: React.MouseEvent, item: HubDesuscripcion) => {
         e.stopPropagation();
-        console.log(`Desuscribiendo de ${name}...`);
+
+        if (!item.unsubscribeUrl) {
+            setToast("Remitente sin baja automática. Selecciónalo para borrarlo.");
+            setNoUnsubscribeIds(prev => [...prev, item.email]);
+            return;
+        }
+
+        const links = item.unsubscribeUrl.match(/<(.*?)>/g)?.map(match => match.slice(1, -1)) || [];
+        const httpLink = links.find(l => l.startsWith('http'));
+        const mailtoLink = links.find(l => l.startsWith('mailto:'));
+
+        if (httpLink) {
+            window.open(httpLink, '_blank');
+            setUnsubscribedIds(prev => [...prev, item.email]);
+        } else if (mailtoLink) {
+            window.open(mailtoLink, '_self');
+            setUnsubscribedIds(prev => [...prev, item.email]);
+        } else {
+            setToast("Remitente sin baja automática. Selecciónalo para borrarlo.");
+            setNoUnsubscribeIds(prev => [...prev, item.email]);
+        }
     };
 
     const handleDelete = async () => {
         setIsDeleting(true);
-        setDeleteSuccess(null);
+        const bytesToDelete = selectedItems.reduce((acc, id) => {
+            if (id.startsWith("clan-")) {
+                const index = parseInt(id.split("-")[1], 10);
+                return acc + (localData.clan[index]?.sizeBytes || 0);
+            } else if (id.startsWith("pueblo-")) {
+                const index = parseInt(id.split("-")[1], 10);
+                return acc + (localData.pueblos[index]?.sizeBytes || 0);
+            } else if (id.startsWith("hub-")) {
+                const index = parseInt(id.split("-")[1], 10);
+                return acc + (localData.hub[index]?.sizeBytes || 0);
+            }
+            return acc;
+        }, 0);
+
         let uidsToDelete: number[] = [];
 
         selectedItems.forEach(id => {
@@ -81,6 +149,9 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             } else if (id.startsWith("pueblo-")) {
                 const index = parseInt(id.split("-")[1], 10);
                 if (localData.pueblos[index]) uidsToDelete.push(localData.pueblos[index].uid);
+            } else if (id.startsWith("hub-")) {
+                const index = parseInt(id.split("-")[1], 10);
+                if (localData.hub[index]) uidsToDelete.push(...localData.hub[index].uids);
             }
         });
 
@@ -107,16 +178,38 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             // Remove deleted items from local state
             const newClan = localData.clan.filter((_, index) => !selectedItems.includes(`clan-${index}`));
             const newPueblos = localData.pueblos.filter((_, index) => !selectedItems.includes(`pueblo-${index}`));
+            const newHub = localData.hub.filter((_, index) => !selectedItems.includes(`hub-${index}`));
 
-            setLocalData({ ...localData, clan: newClan, pueblos: newPueblos });
+            setLocalData({ ...localData, clan: newClan, pueblos: newPueblos, hub: newHub });
             setSelectedItems([]);
             setIsConfirmModalOpen(false);
-            setDeleteSuccess(`¡Limpieza completada! ${result.count} correos están en tu papelera.`);
+
+            const deletedMails = uidsToDelete.length;
+            setSessionStats(prev => ({ mails: prev.mails + deletedMails, bytes: prev.bytes + bytesToDelete }));
+
+            // Update Global LocalStorage
+            try {
+                const globalStats = JSON.parse(localStorage.getItem("zeroTraceGlobalStats") || '{"mails": 0, "bytes": 0}');
+                globalStats.mails += deletedMails;
+                globalStats.bytes += bytesToDelete;
+                localStorage.setItem("zeroTraceGlobalStats", JSON.stringify(globalStats));
+            } catch (err) {
+                console.error("Local storage error", err);
+            }
+
+            const savedMb = (bytesToDelete / (1024 * 1024)).toFixed(1);
+            const savedCo2 = (bytesToDelete / (1024 * 1024) * 0.3).toFixed(1);
+
+            if (bytesToDelete > 0) {
+                setDeleteSuccess(`¡Limpieza completada! Has liberado ${savedMb} MB y reducido tu huella de carbono en ${savedCo2} gramos.`);
+            } else {
+                setDeleteSuccess(`¡Limpieza completada! ${result.count} correos están en tu papelera.`);
+            }
 
             setTimeout(() => setDeleteSuccess(null), 5000);
         } catch (error) {
             console.error(error);
-            alert("Error al intentar borrar correos.");
+            setToast("Error al intentar borrar correos.");
         } finally {
             setIsDeleting(false);
         }
@@ -128,32 +221,65 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
     const totalDesuscripciones = localData?.hub?.length || 0;
     const globalTotal = totalRemitentes + totalFantasmas + totalDesuscripciones;
 
+    const { totalMails: totalSelectedMails, totalBytes: totalSelectedBytes } = selectedItems.reduce((acc, id) => {
+        if (id.startsWith("clan-")) {
+            const index = parseInt(id.split("-")[1], 10);
+            const item = localData.clan[index];
+            if (item) {
+                acc.totalMails += item.uids.length;
+                acc.totalBytes += item.sizeBytes;
+            }
+        } else if (id.startsWith("pueblo-")) {
+            const index = parseInt(id.split("-")[1], 10);
+            const item = localData.pueblos[index];
+            if (item) {
+                acc.totalMails += 1;
+                acc.totalBytes += item.sizeBytes;
+            }
+        } else if (id.startsWith("hub-")) {
+            const index = parseInt(id.split("-")[1], 10);
+            const item = localData.hub[index];
+            if (item) {
+                acc.totalMails += item.uids.length;
+                acc.totalBytes += item.sizeBytes;
+            }
+        }
+        return acc;
+    }, { totalMails: 0, totalBytes: 0 });
+
+
+
     return (
         <>
             {/* Header Section */}
-            <header className="sticky top-0 z-40 bg-slate-900/60 backdrop-blur-md border-b border-white/10 px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={onBack}
-                        className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-                    >
-                        <span className="material-symbols-outlined text-slate-300">arrow_back</span>
-                    </button>
-                    <h1 className="text-xl font-bold tracking-tight text-white">Análisis Completado</h1>
+            <header className="sticky top-0 left-0 w-full z-50 bg-slate-900/80 backdrop-blur-md border-b border-white/5">
+                <div className="max-w-2xl w-full mx-auto px-6 flex justify-between items-center py-4">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={onBack}
+                            className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-slate-300">arrow_back</span>
+                        </button>
+                        <button
+                            onClick={onRefresh}
+                            disabled={isRefreshing}
+                            className={`flex items-center justify-center size-10 rounded-full border transition-all ${isRefreshing
+                                ? "bg-primary/20 border-primary/30 text-primary cursor-not-allowed"
+                                : "bg-white/5 border-white/10 hover:bg-white/10 text-slate-300"
+                                }`}
+                        >
+                            <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? "animate-spin" : ""}`}>
+                                refresh
+                            </span>
+                        </button>
+                    </div>
+                    <div>
+                        <button onClick={() => setShowSummary(true)} className="text-sm text-red-400 hover:text-red-300 transition-colors">
+                            Finalizar Limpieza y Salir
+                        </button>
+                    </div>
                 </div>
-                <button
-                    onClick={onRefresh}
-                    disabled={isRefreshing}
-                    className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-full border transition-all ${isRefreshing
-                        ? "bg-primary/20 border-primary/30 text-primary cursor-not-allowed"
-                        : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-slate-300"
-                        }`}
-                >
-                    <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? "animate-spin" : ""}`}>
-                        refresh
-                    </span>
-                    <span className="hidden md:inline">{isRefreshing ? 'Escaneando...' : 'Actualizar'}</span>
-                </button>
             </header>
 
             <main className="p-6 pb-40 space-y-6 max-w-2xl mx-auto w-full">
@@ -217,14 +343,19 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     const id = `clan-${index}`;
                                     return (
                                         <label key={id} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex flex-col">
-                                                <span className="text-white font-medium truncate max-w-[200px] md:max-w-xs">{item.email}</span>
-                                                <span className="text-slate-400 text-xs">{item.count} correos encontrados</span>
+                                            <div className="flex flex-col flex-1 pr-4 min-w-0">
+                                                <span className="text-lg font-bold text-white whitespace-normal break-words">
+                                                    {getNameFromEmail(item.email)}
+                                                </span>
+                                                <span className="text-sm text-slate-400 whitespace-normal break-words">
+                                                    {item.email} • {item.count} correos - {formatBytes(item.sizeBytes)}
+                                                </span>
                                             </div>
                                             <input
                                                 type="checkbox"
                                                 checked={selectedItems.includes(id)}
                                                 onChange={(e) => handleCheckboxChange(e, id)}
+                                                onClick={(e) => e.stopPropagation()}
                                                 className="size-8 rounded-xl border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-slate-900 cursor-pointer transition-all flex-shrink-0 ml-4"
                                             />
                                         </label>
@@ -269,14 +400,19 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     const id = `pueblo-${index}`;
                                     return (
                                         <label key={id} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex flex-col">
-                                                <span className="text-white font-medium truncate max-w-[200px] md:max-w-xs">{item.email}</span>
-                                                <span className="text-slate-400 text-xs truncate max-w-[200px] md:max-w-xs">{item.subject}</span>
+                                            <div className="flex flex-col flex-1 pr-4 min-w-0">
+                                                <span className="text-lg font-bold text-white whitespace-normal break-words">
+                                                    {getNameFromEmail(item.email)}
+                                                </span>
+                                                <span className="text-sm text-slate-400 whitespace-normal break-words">
+                                                    {item.email} • 1 correo - {formatBytes(item.sizeBytes)}
+                                                </span>
                                             </div>
                                             <input
                                                 type="checkbox"
                                                 checked={selectedItems.includes(id)}
                                                 onChange={(e) => handleCheckboxChange(e, id)}
+                                                onClick={(e) => e.stopPropagation()}
                                                 className="size-8 rounded-xl border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-slate-900 cursor-pointer transition-all flex-shrink-0 ml-4"
                                             />
                                         </label>
@@ -313,40 +449,78 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                             </div>
                         </summary>
                         {openPanel === "desuscripcion" && (
-                            <div className="px-6 pb-6 pt-2 space-y-1">
-                                {localData?.hub?.length === 0 && (
-                                    <p className="text-slate-400 text-sm py-2">No se detectaron subscripciones comerciales.</p>
+                            <div className="px-6 pb-6 pt-2 space-y-4">
+                                {localData.hub.length === 0 && (
+                                    <p className="text-slate-400 text-sm py-2">No se encontraron suscripciones.</p>
                                 )}
-                                {localData?.hub?.map((item, index) => (
-                                    <div key={index} className="flex items-center justify-between py-4 border-t border-white/5 gap-2">
-                                        <div className="flex flex-col flex-1 min-w-0">
-                                            <span className="text-white font-medium truncate">{item.name || item.email}</span>
-                                            <span className="text-slate-400 text-xs truncate">{item.email}</span>
-                                        </div>
-                                        <button
-                                            onClick={(e) => handleUnsubscribeClick(e, item.name || item.email)}
-                                            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition-colors border border-white/5 flex-shrink-0"
-                                        >
-                                            Desuscribir
-                                        </button>
-                                    </div>
-                                ))}
+                                <div className="space-y-1">
+                                    {localData.hub.map((item, index) => {
+                                        const id = `hub-${index}`;
+                                        const isUnsubscribed = unsubscribedIds.includes(item.email);
+                                        const isNoUnsubscribe = noUnsubscribeIds.includes(item.email);
+                                        return (
+                                            <label key={item.email} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex flex-col flex-1 pr-4 min-w-0">
+                                                    <span className="text-lg font-bold text-white whitespace-normal break-words">
+                                                        {getNameFromEmail(item.email)}
+                                                    </span>
+                                                    <span className="text-sm text-slate-400 whitespace-normal break-words">
+                                                        {item.email} • {item.uids.length} correos - {formatBytes(item.sizeBytes)}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-3 ml-4">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleUnsubscribeClick(e, item); }}
+                                                        disabled={isUnsubscribed || isNoUnsubscribe}
+                                                        className={`px-4 py-2 text-sm font-bold rounded-xl transition-colors border flex-shrink-0 ${isUnsubscribed
+                                                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                                            : isNoUnsubscribe
+                                                                ? 'bg-slate-800 text-slate-500 border-white/5 cursor-not-allowed'
+                                                                : 'bg-slate-700 hover:bg-slate-600 text-white border-white/5'
+                                                            }`}
+                                                    >
+                                                        {isUnsubscribed ? "Desuscrito ✓" : isNoUnsubscribe ? "Sin baja web" : "Desuscribir"}
+                                                    </button>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedItems.includes(id)}
+                                                        onChange={(e) => handleCheckboxChange(e, id)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="size-8 rounded-xl border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-slate-900 cursor-pointer transition-all flex-shrink-0"
+                                                    />
+                                                </div>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
                     </details>
                 </div>
+
             </main>
 
             {/* Fixed Global Action Footer */}
             <footer className="fixed bottom-0 left-0 right-0 p-6 bg-slate-900/80 backdrop-blur-xl border-t border-white/10 z-50">
                 <div className="max-w-2xl mx-auto flex flex-col items-center gap-3">
-                    <button
-                        onClick={() => setIsConfirmModalOpen(true)}
-                        className="w-full py-5 bg-red-500/80 hover:bg-red-500 text-white font-bold text-lg rounded-2xl transition-all shadow-lg shadow-red-500/20 active:scale-[0.98] flex items-center justify-center gap-2"
-                    >
-                        <span className="material-symbols-outlined">delete_sweep</span>
-                        Eliminar Correos Seleccionados
-                    </button>
+
+                    {totalSelectedMails > 0 ? (
+                        <button
+                            onClick={() => setIsConfirmModalOpen(true)}
+                            className="w-full py-5 bg-red-500/80 hover:bg-red-500 text-white font-bold text-lg rounded-2xl transition-all shadow-lg shadow-red-500/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                        >
+                            <span className="material-symbols-outlined">delete_sweep</span>
+                            Eliminar {totalSelectedMails} correos ({formatBytes(totalSelectedBytes)})
+                        </button>
+                    ) : (
+                        <button
+                            disabled
+                            className="w-full py-5 bg-slate-700/50 text-slate-400 font-bold text-lg rounded-2xl cursor-not-allowed flex items-center justify-center gap-2 border border-white/5"
+                        >
+                            <span className="material-symbols-outlined">delete_sweep</span>
+                            Selecciona correos para limpiar
+                        </button>
+                    )}
                     <p className="text-slate-400 text-xs text-center flex items-center gap-1">
                         <span className="material-symbols-outlined text-[14px]">info</span>
                         Tranquilo, los correos solo se moverán a tu Papelera.
@@ -389,6 +563,61 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Final Summary Modal overlay */}
+            {showSummary && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="relative w-full max-w-md bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-500 flex flex-col items-center">
+                        <div className="size-20 rounded-full bg-gradient-to-tr from-teal-400/20 to-emerald-400/20 border border-emerald-400/30 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(52,211,153,0.3)]">
+                            <span className="material-symbols-outlined text-emerald-400 text-4xl">emoji_events</span>
+                        </div>
+
+                        <h2 className="text-2xl font-black text-white text-center mb-2">¡Enhorabuena!</h2>
+                        <p className="text-slate-300 text-center text-sm mb-8 leading-relaxed">
+                            Has completado tu sesión de limpieza. Estás haciendo de internet un lugar más rápido y ecológico.
+                        </p>
+
+                        <div className="w-full flex flex-col gap-4 mb-8">
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="size-10 rounded-xl bg-white/5 flex items-center justify-center"><span className="material-symbols-outlined text-slate-300">mail</span></div>
+                                    <span className="text-slate-300 font-medium text-sm">Correos eliminados</span>
+                                </div>
+                                <span className="text-xl font-bold text-white">{sessionStats.mails.toLocaleString()}</span>
+                            </div>
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="size-10 rounded-xl bg-white/5 flex items-center justify-center"><span className="material-symbols-outlined text-indigo-400">cloud_done</span></div>
+                                    <span className="text-slate-300 font-medium text-sm">Espacio liberado</span>
+                                </div>
+                                <span className="text-xl font-bold text-white text-right">{(sessionStats.bytes / (1024 * 1024)).toFixed(1)} MB</span>
+                            </div>
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="size-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center"><span className="material-symbols-outlined text-emerald-400">eco</span></div>
+                                    <span className="text-slate-300 font-medium text-sm">CO2 evitado</span>
+                                </div>
+                                <span className="text-xl font-bold text-emerald-400">{(sessionStats.bytes / (1024 * 1024) * 0.3).toFixed(1)} g</span>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={onLogout}
+                            className="w-full py-4 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-[0.98]"
+                        >
+                            <span>Cerrar sesión y volver al inicio</span>
+                            <span className="material-symbols-outlined text-[20px]">logout</span>
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Global Toast */}
+            {toast && (
+                <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[70] px-6 py-3 bg-slate-800/90 backdrop-blur-md border border-white/10 rounded-full shadow-2xl text-sm text-white animate-in fade-in slide-in-from-bottom-4 duration-300 whitespace-nowrap">
+                    {toast}
                 </div>
             )}
         </>

@@ -12,6 +12,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [scanData, setScanData] = useState<any>(null); // We will pass this to DashboardStep
   const [progress, setProgress] = useState(0);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleScan = async (email: string, appPassword: string) => {
     setIsLoading(true);
@@ -65,6 +66,14 @@ export default function Home() {
     setStep("auth");
   };
 
+  const handleLogout = () => {
+    setCredentials({ email: "", appPassword: "" });
+    setScanData(null);
+    setStep("auth");
+    setSuccessMessage("Sesión cerrada. Tu bandeja está más limpia.");
+    setTimeout(() => setSuccessMessage(null), 5000);
+  };
+
   const handleRefresh = () => {
     if (credentials.email && credentials.appPassword) {
       handleScan(credentials.email, credentials.appPassword);
@@ -73,8 +82,15 @@ export default function Home() {
 
   return (
     <div className="bg-slate-900 font-display min-h-screen text-slate-100 flex flex-col items-center">
+      {/* Global Typographic Logo */}
+      <div className="w-full flex justify-center pt-8 pb-4 relative z-50">
+        <span className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400 tracking-tight">
+          ZeroTrace
+        </span>
+      </div>
+
       {step === "auth" ? (
-        <AuthStep onConnect={handleScan} isLoading={isLoading} error={error} progress={progress} />
+        <AuthStep onConnect={handleScan} isLoading={isLoading} error={error} progress={progress} successMessage={successMessage} />
       ) : (
         <DashboardStep
           onBack={handleBack}
@@ -82,6 +98,7 @@ export default function Home() {
           credentials={credentials}
           onRefresh={handleRefresh}
           isRefreshing={isLoading}
+          onLogout={handleLogout}
         />
       )}
     </div>

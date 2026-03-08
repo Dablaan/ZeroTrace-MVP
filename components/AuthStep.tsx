@@ -1,18 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface AuthStepProps {
     onConnect: (email: string, appPassword: string) => void;
     isLoading: boolean;
     error: string | null;
     progress?: number;
+    successMessage?: string | null;
 }
 
-export default function AuthStep({ onConnect, isLoading, error, progress = 0 }: AuthStepProps) {
+export default function AuthStep({ onConnect, isLoading, error, progress = 0, successMessage = null }: AuthStepProps) {
     const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
     const [email, setEmail] = useState("");
     const [appPassword, setAppPassword] = useState("");
+    const [stats, setStats] = useState({ mails: 0, bytes: 0, co2: 0 });
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem("zeroTraceGlobalStats");
+            if (stored) {
+                const globalStats = JSON.parse(stored);
+                setStats({
+                    mails: globalStats.mails || 0,
+                    bytes: globalStats.bytes || 0,
+                    co2: (globalStats.bytes || 0) * 0.3 / (1024 * 1024)
+                });
+            }
+        } catch (err) {
+            console.error("Failed to read global stats", err);
+        }
+    }, []);
+
+    const formatBytes = (bytes: number) => {
+        if (!bytes || bytes === 0) return '0 KB';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -28,6 +54,7 @@ export default function AuthStep({ onConnect, isLoading, error, progress = 0 }: 
             {/* Main Content Panel */}
             <main className="relative z-10 w-full max-w-xl">
                 <div className="glass-panel p-8 md:p-12 rounded-3xl shadow-2xl flex flex-col items-center text-center">
+
                     {/* Trust Badge */}
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 mb-8">
                         <span className="text-sm font-medium text-slate-300">🛡️ 100% Gratis. 100% Privado.</span>
@@ -42,15 +69,15 @@ export default function AuthStep({ onConnect, isLoading, error, progress = 0 }: 
 
                         <div className="flex flex-wrap justify-center gap-3 mt-8">
                             <div className="glass-panel bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border-0 flex flex-col items-center min-w-[110px]">
-                                <span className="text-primary font-bold text-sm">2.4M</span>
+                                <span className="text-primary font-bold text-sm">{stats.mails.toLocaleString()}</span>
                                 <span className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Mails Limpiados</span>
                             </div>
                             <div className="glass-panel bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border-0 flex flex-col items-center min-w-[110px]">
-                                <span className="text-primary font-bold text-sm">12.5 TB</span>
+                                <span className="text-primary font-bold text-sm">{formatBytes(stats.bytes)}</span>
                                 <span className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Liberados</span>
                             </div>
                             <div className="glass-panel bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border-0 flex flex-col items-center min-w-[110px]">
-                                <span className="text-primary font-bold text-sm">850 Kg</span>
+                                <span className="text-primary font-bold text-sm">{stats.co2.toFixed(1)} g</span>
                                 <span className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">CO2 Ahorrado</span>
                             </div>
                         </div>
@@ -107,6 +134,13 @@ export default function AuthStep({ onConnect, isLoading, error, progress = 0 }: 
                                 <div className="p-3 mt-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center gap-2 text-red-400 text-sm animate-in fade-in slide-in-from-top-2">
                                     <span className="material-symbols-outlined text-[18px]">error</span>
                                     <span>{error}</span>
+                                </div>
+                            )}
+
+                            {successMessage && (
+                                <div className="p-3 mt-4 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center gap-2 text-teal-400 text-sm animate-in fade-in slide-in-from-top-2 shadow-lg shadow-teal-500/10">
+                                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                                    <span>{successMessage}</span>
                                 </div>
                             )}
 

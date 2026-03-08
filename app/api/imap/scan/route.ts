@@ -18,6 +18,7 @@ interface ClanRemitente {
     email: string;
     count: number;
     uids: number[];
+    sizeBytes: number;
 }
 
 interface PuebloFantasma {
@@ -25,13 +26,15 @@ interface PuebloFantasma {
     subject: string;
     date: string;
     uid: number;
+    sizeBytes: number;
 }
 
 interface HubDesuscripcion {
     name: string;
     email: string;
     unsubscribeUrl: string;
-    uid: number;
+    uids: number[];
+    sizeBytes: number;
 }
 
 // Función auxiliara para procesar raw headers manualmente y optimizar CPU
@@ -74,9 +77,9 @@ export async function POST(request: Request) {
         await client.connect();
         const lock = await client.getMailboxLock('INBOX');
 
-        const remitentesMap = new Map<string, { count: number, uids: number[] }>();
+        const remitentesMap = new Map<string, { count: number, uids: number[], sizeBytes: number }>();
         const pueblosFantasmasMap = new Map<number, PuebloFantasma>();
-        const hubDesuscripcionMap = new Map<number, HubDesuscripcion>();
+        const hubDesuscripcionMap = new Map<string, HubDesuscripcion>();
 
         // Lógica de fechas (Comparativa con el año "actual" 2024 demandado)
         const currentYear = 2024;
@@ -97,7 +100,8 @@ export async function POST(request: Request) {
 
             // client.fetch pide ÚNICAMENTE los headers necesarios, OMITIENDO el cuerpo explícitamente y el parseo del envelope
             for await (const message of client.fetch(fetchRange, {
-                headers: ['from', 'subject', 'date', 'list-unsubscribe']
+                headers: ['from', 'subject', 'date', 'list-unsubscribe'],
+                size: true
             })) {
                 const uid = message.uid;
 
@@ -121,11 +125,14 @@ export async function POST(request: Request) {
                 const fromEmail = emailMatch ? emailMatch[1].toLowerCase() : fromHeader.toLowerCase().trim();
                 const senderName = fromHeader.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || fromEmail.split('@')[0];
 
+                const msgSize = message.size || 0;
+
                 // 1. CLAN: Agrupar por remitente
                 if (fromEmail) {
-                    const current = remitentesMap.get(fromEmail) || { count: 0, uids: [] };
+                    const current = remitentesMap.get(fromEmail) || { count: 0, uids: [], sizeBytes: 0 };
                     current.count += 1;
                     current.uids.push(uid);
+                    current.sizeBytes += msgSize;
                     remitentesMap.set(fromEmail, current);
                 }
 
@@ -136,21 +143,23 @@ export async function POST(request: Request) {
                         email: fromEmail,
                         subject: subjectHeader,
                         date: msgDate.toISOString(),
-                        uid: uid
+                        uid: uid,
+                        sizeBytes: msgSize
                     });
                 }
 
                 // 3. HUB: Identificar Newsletters comerciales
                 if (listUnsubscribeHeader) {
-                    const urlMatch = listUnsubscribeHeader.match(/<([^>]+)>/);
-                    const url = urlMatch ? urlMatch[1] : '';
-
-                    hubDesuscripcionMap.set(uid, {
+                    const currentHub = hubDesuscripcionMap.get(fromEmail) || {
                         name: senderName,
                         email: fromEmail,
-                        unsubscribeUrl: url,
-                        uid: uid
-                    });
+                        unsubscribeUrl: listUnsubscribeHeader,
+                        uids: [],
+                        sizeBytes: 0
+                    };
+                    currentHub.uids.push(uid);
+                    currentHub.sizeBytes += msgSize;
+                    hubDesuscripcionMap.set(fromEmail, currentHub);
                 }
             }
         } finally {
@@ -163,18 +172,13 @@ export async function POST(request: Request) {
         // Limpiar Maps de O(N) a Arrays para el cliente
         const clanArray: ClanRemitente[] = Array.from(remitentesMap.entries())
             .filter(([_, data]) => data.count > 2)
-            .map(([email, data]) => ({ email, count: data.count, uids: data.uids }))
+            .map(([email, data]) => ({ email, count: data.count, uids: data.uids, sizeBytes: data.sizeBytes }))
             .sort((a, b) => b.count - a.count);
 
-        const pueblosArray: PuebloFantasma[] = Array.from(pueblosFantasmasMap.values());
+        const pueblosArray: PuebloFantasma[] = Array.from(pueblosFantasmasMap.values())
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        const uniqueHub = new Map<string, HubDesuscripcion>();
-        hubDesuscripcionMap.forEach((data) => {
-            if (!uniqueHub.has(data.email)) {
-                uniqueHub.set(data.email, data);
-            }
-        });
-        const hubArray: HubDesuscripcion[] = Array.from(uniqueHub.values());
+        const hubArray: HubDesuscripcion[] = Array.from(hubDesuscripcionMap.values());
 
         return NextResponse.json({ clan: clanArray, pueblos: pueblosArray, hub: hubArray });
 
