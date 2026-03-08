@@ -333,7 +333,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                 <div className="space-y-4">
                     {/* Panel 1: Clan de Remitentes */}
                     <details
-                        className="group bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl overflow-hidden"
+                        className="group bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl"
                         open={openPanel === "remitentes"}
                         onClick={(e) => {
                             e.preventDefault();
@@ -349,10 +349,8 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     <div className="flex items-center gap-2 relative group/tooltip w-fit">
                                         <h3 className="text-lg font-bold text-white">Clan de Remitentes</h3>
                                         <span className="material-symbols-outlined text-[16px] text-slate-500 cursor-help hover:text-primary transition-colors">info</span>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50">
-                                            <div className="bg-slate-800 border border-slate-700 text-xs text-slate-300 p-3 rounded-xl shadow-xl text-center">
-                                                Correos agrupados por quién te los envía. Ideal para borrar suscripciones pesadas de un plumazo.
-                                            </div>
+                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 w-48 p-2 bg-slate-800 border border-slate-700 text-xs text-slate-300 rounded-md z-[100] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none shadow-xl text-center">
+                                            Correos agrupados por quién te los envía. Ideal para borrar suscripciones pesadas de un plumazo.
                                             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>
                                         </div>
                                     </div>
@@ -399,7 +397,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
 
                     {/* Panel 2: Pueblos Fantasma */}
                     <details
-                        className="group bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl overflow-hidden"
+                        className="group bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl"
                         open={openPanel === "fantasmas"}
                         onClick={(e) => {
                             e.preventDefault();
@@ -415,10 +413,8 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     <div className="flex items-center gap-2 relative group/tooltip w-fit">
                                         <h3 className="text-lg font-bold text-white">Pueblos Fantasma</h3>
                                         <span className="material-symbols-outlined text-[16px] text-slate-500 cursor-help hover:text-amber-500 transition-colors">info</span>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50">
-                                            <div className="bg-slate-800 border border-slate-700 text-xs text-slate-300 p-3 rounded-xl shadow-xl text-center">
-                                                Correos agrupados por el año en que los recibiste. Perfecto para hacer limpieza histórica.
-                                            </div>
+                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 w-48 p-2 bg-slate-800 border border-slate-700 text-xs text-slate-300 rounded-md z-[100] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none shadow-xl text-center">
+                                            Correos agrupados por el año en que los recibiste. Perfecto para hacer limpieza histórica.
                                             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>
                                         </div>
                                     </div>
@@ -465,7 +461,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
 
                     {/* Panel 3: Hub de Desuscripción */}
                     <details
-                        className="group bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl overflow-hidden"
+                        className="group bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl"
                         open={openPanel === "desuscripcion"}
                         onClick={(e) => {
                             e.preventDefault();
@@ -481,10 +477,8 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     <div className="flex items-center gap-2 relative group/tooltip w-fit">
                                         <h3 className="text-lg font-bold text-white">Hub de Desuscripción</h3>
                                         <span className="material-symbols-outlined text-[16px] text-slate-500 cursor-help hover:text-teal-400 transition-colors">info</span>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50">
-                                            <div className="bg-slate-800 border border-slate-700 text-xs text-slate-300 p-3 rounded-xl shadow-xl text-center">
-                                                Detectamos las Newsletters y te damos el botón directo para darte de baja.
-                                            </div>
+                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 w-48 p-2 bg-slate-800 border border-slate-700 text-xs text-slate-300 rounded-md z-[100] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none shadow-xl text-center">
+                                            Detectamos las Newsletters y te damos el botón directo para darte de baja.
                                             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>
                                         </div>
                                     </div>
