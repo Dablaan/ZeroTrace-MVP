@@ -1,32 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-// Mock Data
-const MOCK_REMITENTES = [
-    { id: "zara", email: "marketing@zara.com", count: 142 },
-    { id: "medium", email: "newsletter@medium.com", count: 85 },
-    { id: "uber", email: "promotions@uber.com", count: 64 },
-];
+// Interfaces para tipar la data real
+interface ClanRemitente {
+    email: string;
+    count: number;
+    uids: number[];
+}
 
-const MOCK_FANTASMAS = [
-    { id: "linkedin_archive", email: "archive@linkedin.com", count: 210 },
-];
+interface PuebloFantasma {
+    email: string;
+    subject: string;
+    date: string;
+    uid: number;
+}
 
-const MOCK_DESUSCRIPCIONES = [
-    { id: "spotify", email: "news@spotify.com", entity: "Spotify", status: "Suscripción activa" },
-    { id: "amazon", email: "no-reply@amazon.es", entity: "Amazon", status: "Suscripción activa" },
-];
+interface HubDesuscripcion {
+    name: string;
+    email: string;
+    unsubscribeUrl: string;
+    uid: number;
+}
+
+interface ScanData {
+    clan: ClanRemitente[];
+    pueblos: PuebloFantasma[];
+    hub: HubDesuscripcion[];
+}
 
 interface DashboardStepProps {
     onBack: () => void;
+    scanData: ScanData;
+    credentials: { email: string; appPassword: string };
+    onRefresh: () => void;
+    isRefreshing: boolean;
 }
 
-export default function DashboardStep({ onBack }: DashboardStepProps) {
+export default function DashboardStep({ onBack, scanData, credentials, onRefresh, isRefreshing }: DashboardStepProps) {
     // Estado inicial en null: Todos los paneles colapsados por defecto
     const [openPanel, setOpenPanel] = useState<string | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-    const [selectedItems, setSelectedItems] = useState<string[]>(["zara", "medium"]);
+    const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [localData, setLocalData] = useState<ScanData>(scanData);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+
+    // Sync updated data when scanData prop changes via Refresh
+    useEffect(() => {
+        setLocalData(scanData);
+    }, [scanData]);
 
     const handleTogglePanel = (panel: string) => {
         setOpenPanel(openPanel === panel ? null : panel);
@@ -46,25 +69,100 @@ export default function DashboardStep({ onBack }: DashboardStepProps) {
         console.log(`Desuscribiendo de ${name}...`);
     };
 
-    // Cálculos dinámicos
-    const totalRemitentes = MOCK_REMITENTES.reduce((acc, curr) => acc + curr.count, 0);
-    const totalFantasmas = MOCK_FANTASMAS.reduce((acc, curr) => acc + curr.count, 0);
-    const totalDesuscripciones = MOCK_DESUSCRIPCIONES.length;
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        setDeleteSuccess(null);
+        let uidsToDelete: number[] = [];
+
+        selectedItems.forEach(id => {
+            if (id.startsWith("clan-")) {
+                const index = parseInt(id.split("-")[1], 10);
+                if (localData.clan[index]) uidsToDelete.push(...localData.clan[index].uids);
+            } else if (id.startsWith("pueblo-")) {
+                const index = parseInt(id.split("-")[1], 10);
+                if (localData.pueblos[index]) uidsToDelete.push(localData.pueblos[index].uid);
+            }
+        });
+
+        if (uidsToDelete.length === 0) {
+            setIsDeleting(false);
+            setIsConfirmModalOpen(false);
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/imap/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: credentials.email,
+                    appPassword: credentials.appPassword,
+                    uids: uidsToDelete
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error);
+
+            // Remove deleted items from local state
+            const newClan = localData.clan.filter((_, index) => !selectedItems.includes(`clan-${index}`));
+            const newPueblos = localData.pueblos.filter((_, index) => !selectedItems.includes(`pueblo-${index}`));
+
+            setLocalData({ ...localData, clan: newClan, pueblos: newPueblos });
+            setSelectedItems([]);
+            setIsConfirmModalOpen(false);
+            setDeleteSuccess(`¡Limpieza completada! ${result.count} correos están en tu papelera.`);
+
+            setTimeout(() => setDeleteSuccess(null), 5000);
+        } catch (error) {
+            console.error(error);
+            alert("Error al intentar borrar correos.");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    // Cálculos dinámicos reales basados en localData (para que se actualice al borrar)
+    const totalRemitentes = localData?.clan?.reduce((acc, curr) => acc + curr.count, 0) || 0;
+    const totalFantasmas = localData?.pueblos?.length || 0;
+    const totalDesuscripciones = localData?.hub?.length || 0;
+    const globalTotal = totalRemitentes + totalFantasmas + totalDesuscripciones;
 
     return (
         <>
             {/* Header Section */}
-            <header className="sticky top-0 z-40 bg-slate-900/60 backdrop-blur-md border-b border-white/10 px-6 py-4 flex items-center gap-4">
+            <header className="sticky top-0 z-40 bg-slate-900/60 backdrop-blur-md border-b border-white/10 px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={onBack}
+                        className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-slate-300">arrow_back</span>
+                    </button>
+                    <h1 className="text-xl font-bold tracking-tight text-white">Análisis Completado</h1>
+                </div>
                 <button
-                    onClick={onBack}
-                    className="flex items-center justify-center size-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                    onClick={onRefresh}
+                    disabled={isRefreshing}
+                    className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-full border transition-all ${isRefreshing
+                        ? "bg-primary/20 border-primary/30 text-primary cursor-not-allowed"
+                        : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-slate-300"
+                        }`}
                 >
-                    <span className="material-symbols-outlined text-slate-300">arrow_back</span>
+                    <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? "animate-spin" : ""}`}>
+                        refresh
+                    </span>
+                    <span className="hidden md:inline">{isRefreshing ? 'Escaneando...' : 'Actualizar'}</span>
                 </button>
-                <h1 className="text-xl font-bold tracking-tight text-white">Análisis Completado</h1>
             </header>
 
             <main className="p-6 pb-40 space-y-6 max-w-2xl mx-auto w-full">
+                {deleteSuccess && (
+                    <div className="bg-teal-500/10 border border-teal-500/20 text-teal-400 px-6 py-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 shadow-lg shadow-teal-500/10">
+                        <span className="material-symbols-outlined text-2xl">check_circle</span>
+                        <span className="font-semibold">{deleteSuccess}</span>
+                    </div>
+                )}
                 {/* Progress Card */}
                 <section className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl p-6 shadow-2xl">
                     <div className="flex justify-between items-end mb-4">
@@ -78,7 +176,7 @@ export default function DashboardStep({ onBack }: DashboardStepProps) {
                         <div className="bg-primary h-full rounded-full shadow-[0_0_15px_rgba(20,184,166,0.6)] w-full"></div>
                     </div>
                     <p className="mt-4 text-slate-300 text-sm leading-relaxed">
-                        Se han identificado <span className="text-white font-semibold">2,450 correos</span> que están ocupando espacio innecesario en tu bandeja.
+                        Se han identificado <span className="text-white font-semibold">{globalTotal.toLocaleString()} correos</span> que están ocupando espacio innecesario en tu bandeja.
                     </p>
                 </section>
 
@@ -112,20 +210,26 @@ export default function DashboardStep({ onBack }: DashboardStepProps) {
                         </summary>
                         {openPanel === "remitentes" && (
                             <div className="px-6 pb-6 pt-2 space-y-1">
-                                {MOCK_REMITENTES.map((item) => (
-                                    <label key={item.id} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex flex-col">
-                                            <span className="text-white font-medium">{item.email}</span>
-                                            <span className="text-slate-400 text-xs">{item.count} correos encontrados</span>
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedItems.includes(item.id)}
-                                            onChange={(e) => handleCheckboxChange(e, item.id)}
-                                            className="size-8 rounded-xl border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-slate-900 cursor-pointer transition-all"
-                                        />
-                                    </label>
-                                ))}
+                                {localData?.clan?.length === 0 && (
+                                    <p className="text-slate-400 text-sm py-2">No se encontraron remitentes masivos.</p>
+                                )}
+                                {localData?.clan?.map((item, index) => {
+                                    const id = `clan-${index}`;
+                                    return (
+                                        <label key={id} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex flex-col">
+                                                <span className="text-white font-medium truncate max-w-[200px] md:max-w-xs">{item.email}</span>
+                                                <span className="text-slate-400 text-xs">{item.count} correos encontrados</span>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedItems.includes(id)}
+                                                onChange={(e) => handleCheckboxChange(e, id)}
+                                                className="size-8 rounded-xl border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-slate-900 cursor-pointer transition-all flex-shrink-0 ml-4"
+                                            />
+                                        </label>
+                                    );
+                                })}
                             </div>
                         )}
                     </details>
@@ -158,20 +262,26 @@ export default function DashboardStep({ onBack }: DashboardStepProps) {
                         </summary>
                         {openPanel === "fantasmas" && (
                             <div className="px-6 pb-6 pt-2 space-y-1">
-                                {MOCK_FANTASMAS.map((item) => (
-                                    <label key={item.id} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex flex-col">
-                                            <span className="text-white font-medium">{item.email}</span>
-                                            <span className="text-slate-400 text-xs">{item.count} correos antiguos</span>
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedItems.includes(item.id)}
-                                            onChange={(e) => handleCheckboxChange(e, item.id)}
-                                            className="size-8 rounded-xl border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-slate-900 cursor-pointer transition-all"
-                                        />
-                                    </label>
-                                ))}
+                                {localData?.pueblos?.length === 0 && (
+                                    <p className="text-slate-400 text-sm py-2">No tienes correos antiguos polvorientos.</p>
+                                )}
+                                {localData?.pueblos?.map((item, index) => {
+                                    const id = `pueblo-${index}`;
+                                    return (
+                                        <label key={id} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex flex-col">
+                                                <span className="text-white font-medium truncate max-w-[200px] md:max-w-xs">{item.email}</span>
+                                                <span className="text-slate-400 text-xs truncate max-w-[200px] md:max-w-xs">{item.subject}</span>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedItems.includes(id)}
+                                                onChange={(e) => handleCheckboxChange(e, id)}
+                                                className="size-8 rounded-xl border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-slate-900 cursor-pointer transition-all flex-shrink-0 ml-4"
+                                            />
+                                        </label>
+                                    );
+                                })}
                             </div>
                         )}
                     </details>
@@ -204,15 +314,18 @@ export default function DashboardStep({ onBack }: DashboardStepProps) {
                         </summary>
                         {openPanel === "desuscripcion" && (
                             <div className="px-6 pb-6 pt-2 space-y-1">
-                                {MOCK_DESUSCRIPCIONES.map((item) => (
-                                    <div key={item.id} className="flex items-center justify-between py-4 border-t border-white/5">
-                                        <div className="flex flex-col">
-                                            <span className="text-white font-medium">{item.email}</span>
-                                            <span className="text-slate-400 text-xs">{item.status}</span>
+                                {localData?.hub?.length === 0 && (
+                                    <p className="text-slate-400 text-sm py-2">No se detectaron subscripciones comerciales.</p>
+                                )}
+                                {localData?.hub?.map((item, index) => (
+                                    <div key={index} className="flex items-center justify-between py-4 border-t border-white/5 gap-2">
+                                        <div className="flex flex-col flex-1 min-w-0">
+                                            <span className="text-white font-medium truncate">{item.name || item.email}</span>
+                                            <span className="text-slate-400 text-xs truncate">{item.email}</span>
                                         </div>
                                         <button
-                                            onClick={(e) => handleUnsubscribeClick(e, item.entity)}
-                                            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition-colors border border-white/5"
+                                            onClick={(e) => handleUnsubscribeClick(e, item.name || item.email)}
+                                            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition-colors border border-white/5 flex-shrink-0"
                                         >
                                             Desuscribir
                                         </button>
@@ -250,18 +363,23 @@ export default function DashboardStep({ onBack }: DashboardStepProps) {
                         </div>
                         <h2 className="text-xl font-bold text-white text-center mb-3">¿Seguro que quieres limpiar esto?</h2>
                         <p className="text-slate-300 text-center text-sm leading-relaxed mb-8">
-                            Se moverán <span className="text-white font-bold">{selectedItems.length * 105 || 227} correos</span> a la papelera. Podrás recuperarlos desde tu proveedor de correo en los próximos 30 días.
+                            Se moverán a la papelera todos los correos de las listas seleccionadas. Podrás recuperarlos desde tu proveedor de correo en los próximos 30 días.
                         </p>
                         <div className="flex flex-col gap-3">
                             <button
-                                onClick={() => {
-                                    console.log("Moviendo a papelera...");
-                                    setIsConfirmModalOpen(false);
-                                    // Normalmente limpiaríamos el estado aquí
-                                }}
-                                className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-2xl transition-colors"
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className={`w-full py-4 text-white font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 ${isDeleting ? 'bg-red-600/50 cursor-not-allowed' : 'bg-red-600 hover:bg-red-500'
+                                    }`}
                             >
-                                Sí, Enviar a Papelera
+                                {isDeleting ? (
+                                    <>
+                                        <span>Borrando...</span>
+                                        <span className="material-symbols-outlined animate-spin">refresh</span>
+                                    </>
+                                ) : (
+                                    "Sí, Enviar a Papelera"
+                                )}
                             </button>
                             <button
                                 onClick={() => setIsConfirmModalOpen(false)}

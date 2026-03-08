@@ -3,7 +3,6 @@ export const runtime = "nodejs"; // MUST use Node.js runtime for TCP/TLS sockets
 import { NextResponse } from "next/server";
 import { ImapFlow } from "imapflow";
 
-// Definir la misma función helper de conexión para ZeroTrace
 function getImapConfig(email: string) {
     const domain = email.split('@')[1]?.toLowerCase();
     switch (domain) {
@@ -15,7 +14,6 @@ function getImapConfig(email: string) {
     }
 }
 
-// Interfaces para tipar la respuesta en memoria (Stateless)
 interface ClanRemitente {
     email: string;
     count: number;
@@ -36,6 +34,24 @@ interface HubDesuscripcion {
     uid: number;
 }
 
+// Función auxiliara para procesar raw headers manualmente y optimizar CPU
+function extractHeader(headerText: string, key: string): string {
+    const lines = headerText.split(/\r?\n/);
+    let value = '';
+    let inHeader = false;
+    for (const line of lines) {
+        if (line.toLowerCase().startsWith(key.toLowerCase() + ':')) {
+            value = line.substring(key.length + 1).trim();
+            inHeader = true;
+        } else if (inHeader && (line.startsWith(' ') || line.startsWith('\t'))) {
+            value += ' ' + line.trim();
+        } else if (inHeader) {
+            inHeader = false;
+        }
+    }
+    return value;
+}
+
 export async function POST(request: Request) {
     let client: ImapFlow | null = null;
 
@@ -52,49 +68,60 @@ export async function POST(request: Request) {
             port: config.port,
             secure: true,
             auth: { user: email, pass: appPassword },
-            logger: false // Garantizar Zero Logs
+            logger: false // Zero Logs
         });
 
         await client.connect();
-
-        // Bloquear INBOX para procesar
         const lock = await client.getMailboxLock('INBOX');
 
-        // ALGORITMO ZERO-DATA EN MEMORIA
         const remitentesMap = new Map<string, { count: number, uids: number[] }>();
         const pueblosFantasmasMap = new Map<number, PuebloFantasma>();
         const hubDesuscripcionMap = new Map<number, HubDesuscripcion>();
 
-        const now = new Date();
-        const twoYearsAgo = new Date(now.setFullYear(now.getFullYear() - 2));
+        // Lógica de fechas (Comparativa con el año "actual" 2024 demandado)
+        const currentYear = 2024;
+        const nowMocked = new Date();
+        nowMocked.setFullYear(currentYear);
+        const twoYearsAgo = new Date(nowMocked);
+        twoYearsAgo.setFullYear(currentYear - 2); // Efectivamente 2022 o anterior
 
         try {
-            const totalMessages = client.mailbox.exists;
+            const totalMessages = typeof client.mailbox !== 'boolean' ? client.mailbox.exists : 0;
             if (totalMessages === 0) {
                 return NextResponse.json({ clan: [], pueblos: [], hub: [] });
             }
 
-            // Escanear los últimos 500 correos (o todos si hay menos)
-            const fetchStart = Math.max(1, totalMessages - 499);
+            // Escalar el escaneo a los últimos 2000 correos (optimización para Vercel Serverless)
+            const fetchStart = Math.max(1, totalMessages - 1999);
             const fetchRange = `${fetchStart}:${totalMessages}`;
 
-            // client.fetch es un AsyncGenerator
+            // client.fetch pide ÚNICAMENTE los headers necesarios, OMITIENDO el cuerpo explícitamente y el parseo del envelope
             for await (const message of client.fetch(fetchRange, {
-                envelope: true,
-                internalDate: true,
-                headers: ['list-unsubscribe']
+                headers: ['from', 'subject', 'date', 'list-unsubscribe']
             })) {
                 const uid = message.uid;
-                // Manejar tanto array como objeto dependiendo del parser
-                const fromAddressArray = message.envelope.from;
-                if (!fromAddressArray || fromAddressArray.length === 0) continue;
 
-                const fromEmail = fromAddressArray[0].address || '';
-                const senderName = fromAddressArray[0].name || fromEmail.split('@')[0];
-                const msgDate = new Date(message.internalDate);
-                const subject = message.envelope.subject || "(Sin asunto)";
+                let headersStr = '';
+                if (message.headers && message.headers instanceof Buffer) {
+                    headersStr = message.headers.toString('utf-8');
+                } else if (message.headers && typeof message.headers === 'object') {
+                    try { headersStr = JSON.stringify(message.headers); } catch (e) { }
+                }
 
-                // 1. Agrupar por remitente (CLAN)
+                if (!headersStr) continue;
+
+                const fromHeader = extractHeader(headersStr, 'from');
+                const subjectHeader = extractHeader(headersStr, 'subject') || "(Sin asunto)";
+                const dateHeader = extractHeader(headersStr, 'date');
+                const listUnsubscribeHeader = extractHeader(headersStr, 'list-unsubscribe');
+
+                if (!fromHeader) continue;
+
+                const emailMatch = fromHeader.match(/<([^>]+)>/);
+                const fromEmail = emailMatch ? emailMatch[1].toLowerCase() : fromHeader.toLowerCase().trim();
+                const senderName = fromHeader.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || fromEmail.split('@')[0];
+
+                // 1. CLAN: Agrupar por remitente
                 if (fromEmail) {
                     const current = remitentesMap.get(fromEmail) || { count: 0, uids: [] };
                     current.count += 1;
@@ -102,33 +129,20 @@ export async function POST(request: Request) {
                     remitentesMap.set(fromEmail, current);
                 }
 
-                // 2. Identificar Pueblos Fantasma (Misma lógica: sin guardar en DB, solo en RAM para retornar)
-                if (msgDate < twoYearsAgo) {
+                // 2. PUEBLOS FANTASMAS: Identificar correos de más de 2 años (Previos a 2022)
+                let msgDate = new Date(dateHeader);
+                if (!isNaN(msgDate.getTime()) && msgDate < twoYearsAgo) {
                     pueblosFantasmasMap.set(uid, {
                         email: fromEmail,
-                        subject: subject,
+                        subject: subjectHeader,
                         date: msgDate.toISOString(),
                         uid: uid
                     });
                 }
 
-                // 3. Identificar Newsletters (HUB)
-                // Note: headers could be raw buffers or objects. Imapflow typically parses specific requests.
-                let unsubscribeHeader = '';
-                if (message.headers && message.headers instanceof Buffer) {
-                    unsubscribeHeader = message.headers.toString('utf-8');
-                } else if (message.headers && typeof message.headers === 'object') {
-                    // Si pasamos un array a headers[], ImapFlow devuelve un Buffer, pero si es JSON:
-                    // En ImapFlow v1.x se devuelve Buffer for headers request.
-                    // Para buscar fácil un string, lo parseamos.
-                    try {
-                        unsubscribeHeader = JSON.stringify(message.headers);
-                    } catch (e) { }
-                }
-
-                if (unsubscribeHeader.toLowerCase().includes('list-unsubscribe')) {
-                    // Extract URL if exists between < >
-                    const urlMatch = unsubscribeHeader.match(/<([^>]+)>/);
+                // 3. HUB: Identificar Newsletters comerciales
+                if (listUnsubscribeHeader) {
+                    const urlMatch = listUnsubscribeHeader.match(/<([^>]+)>/);
                     const url = urlMatch ? urlMatch[1] : '';
 
                     hubDesuscripcionMap.set(uid, {
@@ -146,20 +160,14 @@ export async function POST(request: Request) {
         await client.logout();
         client = null;
 
-        // Transform Maps to deduplicated Arrays
-        // Clan: Solo remitentes con más de 2 correos para ser considerados "masivos"
+        // Limpiar Maps de O(N) a Arrays para el cliente
         const clanArray: ClanRemitente[] = Array.from(remitentesMap.entries())
             .filter(([_, data]) => data.count > 2)
-            .map(([email, data]) => ({
-                email,
-                count: data.count,
-                uids: data.uids
-            }))
-            .sort((a, b) => b.count - a.count); // Ordenar por volumen
+            .map(([email, data]) => ({ email, count: data.count, uids: data.uids }))
+            .sort((a, b) => b.count - a.count);
 
         const pueblosArray: PuebloFantasma[] = Array.from(pueblosFantasmasMap.values());
 
-        // Hub: Deduplicar por email de envío para no saturar la UI con el mismo boletín
         const uniqueHub = new Map<string, HubDesuscripcion>();
         hubDesuscripcionMap.forEach((data) => {
             if (!uniqueHub.has(data.email)) {
@@ -168,11 +176,7 @@ export async function POST(request: Request) {
         });
         const hubArray: HubDesuscripcion[] = Array.from(uniqueHub.values());
 
-        return NextResponse.json({
-            clan: clanArray,
-            pueblos: pueblosArray,
-            hub: hubArray
-        });
+        return NextResponse.json({ clan: clanArray, pueblos: pueblosArray, hub: hubArray });
 
     } catch (error: any) {
         if (client) {
