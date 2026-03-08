@@ -21,7 +21,7 @@ interface PuebloFantasma {
 interface HubDesuscripcion {
     name: string;
     email: string;
-    unsubscribeUrl: string;
+    listUnsubscribe: string;
     uids: number[];
     sizeBytes: number;
 }
@@ -49,8 +49,9 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
     const [localData, setLocalData] = useState<ScanData>(scanData);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
-    const [unsubscribedIds, setUnsubscribedIds] = useState<string[]>([]);
-    const [noUnsubscribeIds, setNoUnsubscribeIds] = useState<string[]>([]);
+    const [unsubscribedIds, setUnsubscribedIds] = useState<Set<string>>(new Set());
+    const [noUnsubIds, setNoUnsubIds] = useState<Set<string>>(new Set());
+    const [savedUnsubsCount, setSavedUnsubsCount] = useState(0);
     const [showSummary, setShowSummary] = useState(false);
     const [sessionStats, setSessionStats] = useState({ mails: 0, bytes: 0 });
     const [toast, setToast] = useState<string | null>(null);
@@ -100,27 +101,30 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
     };
 
     const handleUnsubscribeClick = (e: React.MouseEvent, item: HubDesuscripcion) => {
-        e.stopPropagation();
+        e.stopPropagation(); // Bloquear acordeón
 
-        if (!item.unsubscribeUrl) {
-            setToast("Remitente sin baja automática. Selecciónalo para borrarlo.");
-            setNoUnsubscribeIds(prev => [...prev, item.email]);
+        const headerString = item.listUnsubscribe; // O la propiedad exacta que venga del backend
+
+        if (!headerString) {
+            setToast("Este remitente oculta su baja. Selecciónalo y bórralo manualmente.");
+            setNoUnsubIds(prev => new Set(prev).add(item.email));
             return;
         }
 
-        const links = item.unsubscribeUrl.match(/<(.*?)>/g)?.map(match => match.slice(1, -1)) || [];
-        const httpLink = links.find(l => l.startsWith('http'));
-        const mailtoLink = links.find(l => l.startsWith('mailto:'));
+        // Extraer todo lo que esté entre < y >
+        const links = headerString.match(/<(.*?)>/g)?.map((match: string) => match.slice(1, -1)) || [];
+        const httpLink = links.find((l: string) => l.startsWith('http'));
+        const mailtoLink = links.find((l: string) => l.startsWith('mailto:'));
 
         if (httpLink) {
             window.open(httpLink, '_blank');
-            setUnsubscribedIds(prev => [...prev, item.email]);
+            setUnsubscribedIds(prev => new Set(prev).add(item.email));
         } else if (mailtoLink) {
             window.open(mailtoLink, '_self');
-            setUnsubscribedIds(prev => [...prev, item.email]);
+            setUnsubscribedIds(prev => new Set(prev).add(item.email));
         } else {
-            setToast("Remitente sin baja automática. Selecciónalo para borrarlo.");
-            setNoUnsubscribeIds(prev => [...prev, item.email]);
+            setToast("Formato de baja no reconocido. Bórralo manualmente.");
+            setNoUnsubIds(prev => new Set(prev).add(item.email));
         }
     };
 
@@ -193,6 +197,13 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                 globalStats.mails += deletedMails;
                 globalStats.bytes += bytesToDelete;
                 localStorage.setItem("zeroTraceGlobalStats", JSON.stringify(globalStats));
+
+                const currentUnsubs = parseInt(localStorage.getItem("zeroTrace_unsubs") || "0", 10);
+                const unsubsToAdd = unsubscribedIds.size - savedUnsubsCount;
+                if (unsubsToAdd > 0) {
+                    localStorage.setItem("zeroTrace_unsubs", (currentUnsubs + unsubsToAdd).toString());
+                    setSavedUnsubsCount(unsubscribedIds.size);
+                }
             } catch (err) {
                 console.error("Local storage error", err);
             }
@@ -456,8 +467,8 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                 <div className="space-y-1">
                                     {localData.hub.map((item, index) => {
                                         const id = `hub-${index}`;
-                                        const isUnsubscribed = unsubscribedIds.includes(item.email);
-                                        const isNoUnsubscribe = noUnsubscribeIds.includes(item.email);
+                                        const hasUnsubscribe = !!item.listUnsubscribe;
+                                        const isUnsubscribed = hasUnsubscribe && unsubscribedIds.has(item.email);
                                         return (
                                             <label key={item.email} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex flex-col flex-1 pr-4 min-w-0">
@@ -471,15 +482,15 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                                 <div className="flex items-center gap-3 ml-4">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleUnsubscribeClick(e, item); }}
-                                                        disabled={isUnsubscribed || isNoUnsubscribe}
-                                                        className={`px-4 py-2 text-sm font-bold rounded-xl transition-colors border flex-shrink-0 ${isUnsubscribed
-                                                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                                            : isNoUnsubscribe
-                                                                ? 'bg-slate-800 text-slate-500 border-white/5 cursor-not-allowed'
+                                                        disabled={!hasUnsubscribe || isUnsubscribed}
+                                                        className={`px-4 py-2 text-sm font-bold rounded-xl transition-colors border flex-shrink-0 ${!hasUnsubscribe
+                                                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed border-none'
+                                                            : isUnsubscribed
+                                                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
                                                                 : 'bg-slate-700 hover:bg-slate-600 text-white border-white/5'
                                                             }`}
                                                     >
-                                                        {isUnsubscribed ? "Desuscrito ✓" : isNoUnsubscribe ? "Sin baja web" : "Desuscribir"}
+                                                        {!hasUnsubscribe ? "Baja manual" : isUnsubscribed ? "Desuscrito ✓" : "Desuscribir"}
                                                     </button>
                                                     <input
                                                         type="checkbox"
@@ -600,6 +611,13 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                     <span className="text-slate-300 font-medium text-sm">CO2 evitado</span>
                                 </div>
                                 <span className="text-xl font-bold text-emerald-400">{(sessionStats.bytes / (1024 * 1024) * 0.3).toFixed(1)} g</span>
+                            </div>
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="size-10 rounded-xl bg-indigo-500/20 flex items-center justify-center"><span className="material-symbols-outlined text-indigo-400">link_off</span></div>
+                                    <span className="text-slate-300 font-medium text-sm">Newsletters Canceladas</span>
+                                </div>
+                                <span className="text-xl font-bold text-indigo-400">{unsubscribedIds.size}</span>
                             </div>
                         </div>
 

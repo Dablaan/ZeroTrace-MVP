@@ -14,19 +14,29 @@ export default function AuthStep({ onConnect, isLoading, error, progress = 0, su
     const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
     const [email, setEmail] = useState("");
     const [appPassword, setAppPassword] = useState("");
-    const [stats, setStats] = useState({ mails: 0, bytes: 0, co2: 0 });
+    const [stats, setStats] = useState({ mails: 0, bytes: 0, co2: 0, unsubs: 0 });
 
     useEffect(() => {
         try {
             const stored = localStorage.getItem("zeroTraceGlobalStats");
+            const storedUnsubs = localStorage.getItem("zeroTrace_unsubs");
+
+            let mails = 0, bytes = 0, unsubs = 0;
             if (stored) {
                 const globalStats = JSON.parse(stored);
-                setStats({
-                    mails: globalStats.mails || 0,
-                    bytes: globalStats.bytes || 0,
-                    co2: (globalStats.bytes || 0) * 0.3 / (1024 * 1024)
-                });
+                mails = globalStats.mails || 0;
+                bytes = globalStats.bytes || 0;
             }
+            if (storedUnsubs) {
+                unsubs = parseInt(storedUnsubs, 10) || 0;
+            }
+
+            setStats({
+                mails,
+                bytes,
+                co2: (bytes || 0) * 0.3 / (1024 * 1024),
+                unsubs
+            });
         } catch (err) {
             console.error("Failed to read global stats", err);
         }
@@ -79,6 +89,12 @@ export default function AuthStep({ onConnect, isLoading, error, progress = 0, su
                             <div className="glass-panel bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border-0 flex flex-col items-center min-w-[110px]">
                                 <span className="text-primary font-bold text-sm">{stats.co2.toFixed(1)} g</span>
                                 <span className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">CO2 Ahorrado</span>
+                            </div>
+                            <div className="glass-panel bg-white/5 backdrop-blur-md px-4 py-3 rounded-2xl border-0 flex flex-col items-center min-w-[110px]">
+                                <span className="text-primary font-bold text-sm flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[16px]">link_off</span> {stats.unsubs.toLocaleString()}
+                                </span>
+                                <span className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold text-center leading-tight mt-1">Suscripciones<br />Canceladas</span>
                             </div>
                         </div>
                     </div>

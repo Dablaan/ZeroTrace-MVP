@@ -32,7 +32,7 @@ interface PuebloFantasma {
 interface HubDesuscripcion {
     name: string;
     email: string;
-    unsubscribeUrl: string;
+    listUnsubscribe: string;
     uids: number[];
     sizeBytes: number;
 }
@@ -119,6 +119,10 @@ export async function POST(request: Request) {
                 const dateHeader = extractHeader(headersStr, 'date');
                 const listUnsubscribeHeader = extractHeader(headersStr, 'list-unsubscribe');
 
+                if (listUnsubscribeHeader) {
+                    console.log("🔍 UNSUB ENCONTRADO:", listUnsubscribeHeader);
+                }
+
                 if (!fromHeader) continue;
 
                 const emailMatch = fromHeader.match(/<([^>]+)>/);
@@ -153,7 +157,7 @@ export async function POST(request: Request) {
                     const currentHub = hubDesuscripcionMap.get(fromEmail) || {
                         name: senderName,
                         email: fromEmail,
-                        unsubscribeUrl: listUnsubscribeHeader,
+                        listUnsubscribe: listUnsubscribeHeader,
                         uids: [],
                         sizeBytes: 0
                     };
