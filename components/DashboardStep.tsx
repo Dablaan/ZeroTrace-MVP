@@ -101,10 +101,21 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
 
     const getUnsubscribeLinks = (headerStr: string | null | undefined) => {
         if (!headerStr) return { httpLink: null, mailtoLink: null, hasValidLink: false };
-        // Extraer todo dentro de los < >
-        const links = headerStr.match(/<(.*?)>/g)?.map((m: string) => m.slice(1, -1)) || [];
-        const httpLink = links.find((l: string) => l.startsWith('http')) || null;
-        const mailtoLink = links.find((l: string) => l.startsWith('mailto:')) || null;
+
+        // Find ANY http/https link, even outside brackets
+        const httpMatch = headerStr.match(/https?:\/\/[^\s>"]+/i);
+        const httpLink = httpMatch ? httpMatch[0] : null;
+
+        // Find ANY mailto link, even outside brackets
+        const mailtoMatch = headerStr.match(/mailto:[^\s>"]+/i);
+        const mailtoLink = mailtoMatch ? mailtoMatch[0] : null;
+
+        // Detector de Falsos Positivos: Ignorar si el header declara ser un mail transaccional u orientativo
+        const isTransactionalFake = /opinion-request|transactional|receipt|invoice|reset-password/i.test(headerStr);
+        if (isTransactionalFake) {
+            return { httpLink: null, mailtoLink: null, hasValidLink: false };
+        }
+
         return { httpLink, mailtoLink, hasValidLink: !!(httpLink || mailtoLink) };
     };
 
