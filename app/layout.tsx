@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Public_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -7,6 +7,14 @@ const publicSans = Public_Sans({
   variable: "--font-public-sans",
   display: "swap",
 });
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: "ZeroTrace - Limpia tu correo en segundos",
