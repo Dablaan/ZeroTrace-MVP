@@ -147,7 +147,7 @@ export default function AuthStep({ onConnect, isLoading, error, progress = 0, su
                                                     if (provider === 'microsoft') return <span>Necesitas una contraseña de aplicación de Microsoft. <a href="https://account.live.com/proofs/manage/additional" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>;
                                                     if (provider === 'yahoo') return <span>Necesitas una contraseña de aplicación de Yahoo. <a href="https://login.yahoo.com/account/security" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>;
                                                     if (provider === 'apple') return <span>Necesitas una contraseña específica de aplicación de iCloud. <a href="https://appleid.apple.com/account/manage" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>;
-                                                    return <span>Si tu correo usa verificación en 2 pasos, genera una 'Contraseña de Aplicación'. Si es un servidor clásico o corporativo, usa tu contraseña normal.</span>;
+                                                    return <span>Si tu correo usa verificación en 2 pasos, genera una Contraseña de Aplicación. Si es un servidor clásico o corporativo, usa tu contraseña normal.</span>;
                                                 })()}
                                             </div>
                                             {/* Tooltip Arrow */}
