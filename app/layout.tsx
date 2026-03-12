@@ -19,6 +19,15 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "ZeroTrace - Limpia tu correo en segundos",
   description: "La herramienta definitiva para desuscribirse masivamente sin comprometer tu privacidad.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ZeroTrace",
+  },
+  icons: {
+    apple: "/img/icono-zerotrace.png",
+  },
 };
 
 export default function RootLayout({
