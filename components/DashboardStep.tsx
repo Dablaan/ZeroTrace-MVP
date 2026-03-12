@@ -64,6 +64,38 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
         }
     }, [toast]);
 
+    const downloadCalendarEvent = () => {
+        const date = new Date();
+        date.setDate(date.getDate() + 30);
+
+        const formatICSDate = (d: Date) => d.toISOString().replace(/-|:|\.\d\d\d/g, "");
+        const start = formatICSDate(date);
+        const end = formatICSDate(new Date(date.getTime() + 30 * 60000));
+
+        const icsContent = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//ZeroTrace//ES",
+            "BEGIN:VEVENT",
+            `DTSTART:${start}`,
+            `DTEND:${end}`,
+            "SUMMARY:Limpieza mensual de bandeja de entrada \uD83E\uDDF9",
+            "DESCRIPTION:Es hora de hacer tu limpieza mensual para reducir tu huella de carbono digital y mantener tu inbox a cero.\n\nEntra en: https://zerotrace.vercel.app",
+            "END:VEVENT",
+            "END:VCALENDAR"
+        ].join("\r\n");
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'zerotrace-recordatorio.ics');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const formatBytes = (bytes: number) => {
         if (!bytes || bytes === 0) return '0 KB';
         const k = 1024;
@@ -659,6 +691,14 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                 <span className="text-xl font-bold text-indigo-400">{unsubscribedIds.size}</span>
                             </div>
                         </div>
+
+                        <button
+                            onClick={downloadCalendarEvent}
+                            className="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2 active:scale-[0.98] mb-3"
+                        >
+                            <span className="material-symbols-outlined text-[20px] text-emerald-400">calendar_add_on</span>
+                            <span>Recordarme en 30 días</span>
+                        </button>
 
                         <button
                             onClick={onLogout}
