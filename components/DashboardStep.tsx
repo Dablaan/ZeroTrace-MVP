@@ -32,6 +32,8 @@ export interface ScanData {
     hub: HubDesuscripcion[];
 }
 
+import { getProviderConfig } from "./AuthStep";
+
 interface DashboardStepProps {
     onBack: () => void;
     scanData: ScanData;
@@ -178,12 +180,16 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
         }
 
         try {
+            const { host, port } = getProviderConfig(credentials.email);
+
             const response = await fetch("/api/imap/delete", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     email: credentials.email,
                     appPassword: credentials.appPassword,
+                    imapHost: host,
+                    imapPort: port,
                     uids: uidsToDelete
                 })
             });

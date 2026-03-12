@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import AuthStep from "@/components/AuthStep";
+import AuthStep, { getProviderConfig } from "@/components/AuthStep";
 import DashboardStep, { ScanData } from "@/components/DashboardStep";
 
 export default function Home() {
@@ -28,10 +28,12 @@ export default function Home() {
     }, 700);
 
     try {
+      const { host, port } = getProviderConfig(email);
+
       const response = await fetch("/api/imap/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, appPassword }),
+        body: JSON.stringify({ email, appPassword, imapHost: host, imapPort: port }),
       });
 
       const data = await response.json();

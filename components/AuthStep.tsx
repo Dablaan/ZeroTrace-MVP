@@ -10,6 +10,19 @@ interface AuthStepProps {
     successMessage?: string | null;
 }
 
+export const getProviderConfig = (email: string) => {
+    const lowerEmail = email.toLowerCase();
+    if (lowerEmail.includes('@gmail.com')) return { host: 'imap.gmail.com', port: 993, provider: 'google' };
+    if (lowerEmail.includes('@outlook.') || lowerEmail.includes('@hotmail.') || lowerEmail.includes('@live.') || lowerEmail.includes('@msn.')) return { host: 'outlook.office365.com', port: 993, provider: 'microsoft' };
+    if (lowerEmail.includes('@yahoo.')) return { host: 'imap.mail.yahoo.com', port: 993, provider: 'yahoo' };
+    if (lowerEmail.includes('@icloud.') || lowerEmail.includes('@mac.') || lowerEmail.includes('@me.')) return { host: 'imap.mail.me.com', port: 993, provider: 'apple' };
+    if (lowerEmail.includes('@aol.')) return { host: 'imap.aol.com', port: 993, provider: 'aol' };
+
+    // Fallback genérico (intenta adivinar el imap del dominio o usa la contraseña clásica)
+    const domain = lowerEmail.split('@')[1];
+    return { host: domain ? `imap.${domain}` : '', port: 993, provider: 'other' };
+};
+
 export default function AuthStep({ onConnect, isLoading, error, progress = 0, successMessage = null }: AuthStepProps) {
     const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
     const [email, setEmail] = useState("");
@@ -128,13 +141,14 @@ export default function AuthStep({ onConnect, isLoading, error, progress = 0, su
                                         {/* Dynamic Tooltip */}
                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50">
                                             <div className="bg-slate-800 border border-slate-700 text-xs text-slate-300 p-3 rounded-xl shadow-xl">
-                                                {email.includes('@gmail.com') ? (
-                                                    <span>Necesitas una contraseña de aplicación de Google. <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>
-                                                ) : email.includes('@outlook') || email.includes('@hotmail') ? (
-                                                    <span>Necesitas una contraseña de aplicación de Microsoft. <a href="https://account.live.com/proofs/manage/additional" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>
-                                                ) : (
-                                                    <span>Usa la contraseña de aplicación generada en la configuración de seguridad de tu proveedor de correo.</span>
-                                                )}
+                                                {(() => {
+                                                    const { provider } = getProviderConfig(email);
+                                                    if (provider === 'google') return <span>Necesitas una contraseña de aplicación de Google. <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>;
+                                                    if (provider === 'microsoft') return <span>Necesitas una contraseña de aplicación de Microsoft. <a href="https://account.live.com/proofs/manage/additional" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>;
+                                                    if (provider === 'yahoo') return <span>Necesitas una contraseña de aplicación de Yahoo. <a href="https://login.yahoo.com/account/security" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>;
+                                                    if (provider === 'apple') return <span>Necesitas una contraseña específica de aplicación de iCloud. <a href="https://appleid.apple.com/account/manage" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Créala aquí</a>.</span>;
+                                                    return <span>Si tu correo usa verificación en 2 pasos, genera una 'Contraseña de Aplicación'. Si es un servidor clásico o corporativo, usa tu contraseña normal.</span>;
+                                                })()}
                                             </div>
                                             {/* Tooltip Arrow */}
                                             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>

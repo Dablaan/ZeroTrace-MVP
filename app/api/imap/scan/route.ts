@@ -3,17 +3,6 @@ export const runtime = "nodejs"; // MUST use Node.js runtime for TCP/TLS sockets
 import { NextResponse } from "next/server";
 import { ImapFlow } from "imapflow";
 
-function getImapConfig(email: string) {
-    const domain = email.split('@')[1]?.toLowerCase();
-    switch (domain) {
-        case 'gmail.com': return { host: 'imap.gmail.com', port: 993 };
-        case 'outlook.com':
-        case 'hotmail.com': return { host: 'outlook.office365.com', port: 993 };
-        case 'yahoo.com': return { host: 'imap.mail.yahoo.com', port: 993 };
-        default: throw new Error('Dominio de correo no soportado por ahora.');
-    }
-}
-
 interface ClanRemitente {
     email: string;
     count: number;
@@ -59,16 +48,15 @@ export async function POST(request: Request) {
     let client: ImapFlow | null = null;
 
     try {
-        const { email, appPassword } = await request.json();
+        const { email, appPassword, imapHost, imapPort } = await request.json();
 
-        if (!email || !appPassword) {
-            return NextResponse.json({ error: "Email y App Password requeridos" }, { status: 400 });
+        if (!email || !appPassword || !imapHost || !imapPort) {
+            return NextResponse.json({ error: "Email, App Password y servidor IMAP requeridos" }, { status: 400 });
         }
 
-        const config = getImapConfig(email);
         client = new ImapFlow({
-            host: config.host,
-            port: config.port,
+            host: imapHost,
+            port: imapPort,
             secure: true,
             auth: { user: email, pass: appPassword },
             logger: false // Zero Logs

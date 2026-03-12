@@ -3,34 +3,22 @@ export const runtime = "nodejs"; // MUST use Node.js runtime for TCP/TLS sockets
 import { NextResponse } from "next/server";
 import { ImapFlow } from "imapflow";
 
-function getImapConfig(email: string) {
-    const domain = email.split('@')[1]?.toLowerCase();
-    switch (domain) {
-        case 'gmail.com': return { host: 'imap.gmail.com', port: 993 };
-        case 'outlook.com':
-        case 'hotmail.com': return { host: 'outlook.office365.com', port: 993 };
-        case 'yahoo.com': return { host: 'imap.mail.yahoo.com', port: 993 };
-        default: throw new Error('Dominio de correo no soportado por ahora.');
-    }
-}
-
 export async function POST(request: Request) {
     let client: ImapFlow | null = null;
 
     try {
-        const { email, appPassword, uids } = await request.json();
+        const { email, appPassword, imapHost, imapPort, uids } = await request.json();
 
-        if (!email || !appPassword || !Array.isArray(uids) || uids.length === 0) {
+        if (!email || !appPassword || !imapHost || !imapPort || !Array.isArray(uids) || uids.length === 0) {
             return NextResponse.json(
-                { error: "Email, App Password y una lista de Correos a borrar requeridos" },
+                { error: "Email, App Password, servidor IMAP y una lista de Correos a borrar requeridos" },
                 { status: 400 }
             );
         }
 
-        const config = getImapConfig(email);
         client = new ImapFlow({
-            host: config.host,
-            port: config.port,
+            host: imapHost,
+            port: imapPort,
             secure: true,
             auth: { user: email, pass: appPassword },
             logger: false // Zero Logs
