@@ -42,6 +42,9 @@ async function getSpamDomains(): Promise<Set<string>> {
         if (!res.ok) return new Set();
         const text = await res.text();
         const domains = text.split('\n').map(d => d.trim().toLowerCase()).filter(d => d.length > 0);
+        // --- CÓDIGO TEMPORAL DE PRUEBA ---
+        domains.push('amazon.es'); // Reemplaza 'amazon.es' por el dominio que hayas elegido
+        // ---------------------------------
         return new Set(domains);
     } catch (error) {
         console.error("Error fetching spam list:", error);
