@@ -25,14 +25,12 @@ interface HubDesuscripcion {
     uids: number[];
     sizeBytes: number;
 }
-
-interface SpamItem {
-    id: number;
+interface SpamGroup {
     email: string;
     name: string;
-    subject: string;
-    date: string;
-    size: number;
+    count: number;
+    totalSize: number;
+    ids: number[];
 }
 
 async function getSpamDomains(): Promise<Set<string>> {
@@ -42,9 +40,7 @@ async function getSpamDomains(): Promise<Set<string>> {
         if (!res.ok) return new Set();
         const text = await res.text();
         const domains = text.split('\n').map(d => d.trim().toLowerCase()).filter(d => d.length > 0);
-        // --- CÓDIGO TEMPORAL DE PRUEBA ---
-        domains.push('amazon.es'); // Reemplaza 'amazon.es' por el dominio que hayas elegido
-        // ---------------------------------
+        console.log(`\uD83D\uDEE1\uFE0F Motor Anti-Spam: Cargados ${domains.length} dominios en caché.`);
         return new Set(domains);
     } catch (error) {
         console.error("Error fetching spam list:", error);
@@ -92,7 +88,7 @@ export async function POST(request: Request) {
         const lock = await client.getMailboxLock('INBOX');
 
         const spamDomains = await getSpamDomains();
-        const spamRadar: SpamItem[] = [];
+        const spamMap = new Map<string, SpamGroup>();
 
         const remitentesMap = new Map<string, { count: number, uids: number[], sizeBytes: number }>();
         const pueblosFantasmasMap = new Map<number, PuebloFantasma>();
@@ -186,14 +182,19 @@ export async function POST(request: Request) {
                 // 4. RADAR ANTI-SPAM: Detectar dominios temporales
                 const senderDomain = fromEmail.split('@')[1]?.toLowerCase();
                 if (senderDomain && spamDomains.has(senderDomain)) {
-                    spamRadar.push({
-                        id: uid,
-                        email: fromEmail,
-                        name: senderName || fromEmail,
-                        subject: subjectHeader || 'Sin asunto',
-                        date: dateHeader || new Date().toISOString(),
-                        size: msgSize || 0
-                    });
+                    if (!spamMap.has(fromEmail)) {
+                        spamMap.set(fromEmail, {
+                            email: fromEmail,
+                            name: senderName || fromEmail,
+                            count: 0,
+                            totalSize: 0,
+                            ids: []
+                        });
+                    }
+                    const spamGroup = spamMap.get(fromEmail)!;
+                    spamGroup.count += 1;
+                    spamGroup.totalSize += msgSize;
+                    spamGroup.ids.push(uid);
                 }
             }
         } finally {
@@ -213,8 +214,9 @@ export async function POST(request: Request) {
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         const hubArray: HubDesuscripcion[] = Array.from(hubDesuscripcionMap.values());
+        const spamRadarArray: SpamGroup[] = Array.from(spamMap.values()).sort((a, b) => b.count - a.count);
 
-        return NextResponse.json({ clan: clanArray, pueblos: pueblosArray, hub: hubArray, spamRadar });
+        return NextResponse.json({ clan: clanArray, pueblos: pueblosArray, hub: hubArray, spamRadar: spamRadarArray });
 
     } catch (error: unknown) {
         if (client) {

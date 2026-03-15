@@ -26,20 +26,19 @@ interface HubDesuscripcion {
     sizeBytes: number;
 }
 
-export interface SpamItem {
-    id: number;
+export interface SpamGroup {
     email: string;
     name: string;
-    subject: string;
-    date: string;
-    size: number;
+    count: number;
+    totalSize: number;
+    ids: number[];
 }
 
 export interface ScanData {
     clan: ClanRemitente[];
     pueblos: PuebloFantasma[];
     hub: HubDesuscripcion[];
-    spamRadar: SpamItem[];
+    spamRadar: SpamGroup[];
 }
 
 import { getProviderConfig } from "./AuthStep";
@@ -127,7 +126,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             clan: [...scanData.clan].sort((a, b) => b.count - a.count),
             pueblos: [...scanData.pueblos].sort((a, b) => b.sizeBytes - a.sizeBytes),
             hub: [...scanData.hub].sort((a, b) => b.uids.length - a.uids.length),
-            spamRadar: scanData.spamRadar ? [...scanData.spamRadar].sort((a, b) => b.size - a.size) : []
+            spamRadar: scanData.spamRadar ? [...scanData.spamRadar].sort((a, b) => b.count - a.count) : []
         };
         setLocalData(sortedData);
     }, [scanData]);
@@ -199,7 +198,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                 return acc + (localData.hub[index]?.sizeBytes || 0);
             } else if (id.startsWith("spam-")) {
                 const index = parseInt(id.split("-")[1], 10);
-                return acc + (localData.spamRadar[index]?.size || 0);
+                return acc + (localData.spamRadar[index]?.totalSize || 0);
             }
             return acc;
         }, 0);
@@ -218,7 +217,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                 if (localData.hub[index]) uidsToDelete.push(...localData.hub[index].uids);
             } else if (id.startsWith("spam-")) {
                 const index = parseInt(id.split("-")[1], 10);
-                if (localData.spamRadar[index]) uidsToDelete.push(localData.spamRadar[index].id);
+                if (localData.spamRadar[index]) uidsToDelete.push(...localData.spamRadar[index].ids);
             }
         });
 
@@ -300,7 +299,7 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
     const totalRemitentes = localData?.clan?.reduce((acc, curr) => acc + curr.count, 0) || 0;
     const totalFantasmas = localData?.pueblos?.length || 0;
     const totalDesuscripciones = localData?.hub?.length || 0;
-    const totalSpam = localData?.spamRadar?.length || 0;
+    const totalSpam = localData?.spamRadar?.reduce((acc, curr) => acc + curr.count, 0) || 0;
     const globalTotal = totalRemitentes + totalFantasmas + totalDesuscripciones + totalSpam;
 
     const { totalMails: totalSelectedMails, totalBytes: totalSelectedBytes } = selectedItems.reduce((acc, id) => {
@@ -329,8 +328,8 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             const index = parseInt(id.split("-")[1], 10);
             const item = localData.spamRadar[index];
             if (item) {
-                acc.totalMails += 1;
-                acc.totalBytes += item.size;
+                acc.totalMails += item.count;
+                acc.totalBytes += item.totalSize;
             }
         }
         return acc;
@@ -651,10 +650,10 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                         <label key={id} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex flex-col flex-1 pr-4 min-w-0">
                                                 <span className="text-lg font-bold text-white whitespace-normal break-words">
-                                                    {item.name}
+                                                    {getNameFromEmail(item.email)}
                                                 </span>
                                                 <span className="text-sm text-slate-400 whitespace-normal break-words">
-                                                    {item.email} • 1 correo - {formatBytes(item.size)}
+                                                    {item.email} • {item.count} correos - {formatBytes(item.totalSize)}
                                                 </span>
                                             </div>
                                             <input
