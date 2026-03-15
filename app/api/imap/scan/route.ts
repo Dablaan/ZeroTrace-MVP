@@ -104,7 +104,7 @@ export async function POST(request: Request) {
         try {
             const totalMessages = typeof client.mailbox !== 'boolean' ? client.mailbox.exists : 0;
             if (totalMessages === 0) {
-                return NextResponse.json({ clan: [], pueblos: [], hub: [] });
+                return NextResponse.json({ clan: [], pueblos: [], hub: [], spamRadar: [] });
             }
 
             // Escalar el escaneo a los últimos 2000 correos (optimización para Vercel Serverless)
@@ -116,7 +116,9 @@ export async function POST(request: Request) {
                 headers: ['from', 'subject', 'date', 'list-unsubscribe'],
                 size: true
             })) {
+                try {
                 const uid = message.uid;
+                if (!uid) continue; // Correo corrupto sin ID, lo saltamos
 
                 let headersStr = '';
                 if (message.headers && message.headers instanceof Buffer) {
@@ -131,10 +133,6 @@ export async function POST(request: Request) {
                 const subjectHeader = extractHeader(headersStr, 'subject') || "(Sin asunto)";
                 const dateHeader = extractHeader(headersStr, 'date');
                 const listUnsubscribeHeader = extractHeader(headersStr, 'list-unsubscribe');
-
-                if (listUnsubscribeHeader) {
-                    console.log("🔍 UNSUB ENCONTRADO:", listUnsubscribeHeader);
-                }
 
                 if (!fromHeader) continue;
 
@@ -201,6 +199,10 @@ export async function POST(request: Request) {
                     spamGroup.totalSize += msgSize;
                     spamGroup.ids.push(uid);
                 }
+                } catch (msgError) {
+                    console.error(`⚠️ Mensaje corrupto saltado (UID: ${message?.uid || '?'}):`, msgError);
+                    continue;
+                }
             }
         } finally {
             lock.release();
@@ -224,8 +226,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ clan: clanArray, pueblos: pueblosArray, hub: hubArray, spamRadar: spamRadarArray });
 
     } catch (error: unknown) {
+        console.error("🔥 ERROR CRÍTICO EN BACKEND:", error);
         if (client) {
-            client.close();
+            try { client.close(); } catch { }
             client = null;
         }
 
@@ -234,6 +237,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
         }
 
-        return NextResponse.json({ error: errMessage }, { status: 500 });
+        return NextResponse.json(
+            { error: "Fallo interno al escanear", details: errMessage },
+            { status: 500 }
+        );
     }
 }
