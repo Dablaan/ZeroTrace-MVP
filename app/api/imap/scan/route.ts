@@ -140,24 +140,30 @@ export async function POST(request: Request) {
 
                 const emailMatch = fromHeader.match(/<([^>]+)>/);
                 const fromEmail = emailMatch ? emailMatch[1].toLowerCase() : fromHeader.toLowerCase().trim();
-                const senderName = fromHeader.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || fromEmail.split('@')[0];
+                const safeSenderEmail = fromEmail || '';
+                const senderName = fromHeader.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || (safeSenderEmail.includes('@') ? safeSenderEmail.split('@')[0] : 'Desconocido');
 
                 const msgSize = message.size || 0;
 
+                // Extraer dominio de forma segura
+                const senderDomain = safeSenderEmail.includes('@')
+                    ? safeSenderEmail.split('@')[1].toLowerCase()
+                    : null;
+
                 // 1. CLAN: Agrupar por remitente
-                if (fromEmail) {
-                    const current = remitentesMap.get(fromEmail) || { count: 0, uids: [], sizeBytes: 0 };
+                if (safeSenderEmail && safeSenderEmail.includes('@')) {
+                    const current = remitentesMap.get(safeSenderEmail) || { count: 0, uids: [], sizeBytes: 0 };
                     current.count += 1;
                     current.uids.push(uid);
                     current.sizeBytes += msgSize;
-                    remitentesMap.set(fromEmail, current);
+                    remitentesMap.set(safeSenderEmail, current);
                 }
 
                 // 2. PUEBLOS FANTASMAS: Identificar correos de más de 2 años (Previos a 2022)
                 const msgDate = new Date(dateHeader);
                 if (!isNaN(msgDate.getTime()) && msgDate < twoYearsAgo) {
                     pueblosFantasmasMap.set(uid, {
-                        email: fromEmail,
+                        email: safeSenderEmail || 'desconocido',
                         subject: subjectHeader,
                         date: msgDate.toISOString(),
                         uid: uid,
@@ -166,32 +172,31 @@ export async function POST(request: Request) {
                 }
 
                 // 3. HUB: Identificar Newsletters comerciales
-                if (listUnsubscribeHeader) {
-                    const currentHub = hubDesuscripcionMap.get(fromEmail) || {
+                if (listUnsubscribeHeader && safeSenderEmail) {
+                    const currentHub = hubDesuscripcionMap.get(safeSenderEmail) || {
                         name: senderName,
-                        email: fromEmail,
+                        email: safeSenderEmail,
                         listUnsubscribe: listUnsubscribeHeader,
                         uids: [],
                         sizeBytes: 0
                     };
                     currentHub.uids.push(uid);
                     currentHub.sizeBytes += msgSize;
-                    hubDesuscripcionMap.set(fromEmail, currentHub);
+                    hubDesuscripcionMap.set(safeSenderEmail, currentHub);
                 }
 
                 // 4. RADAR ANTI-SPAM: Detectar dominios temporales
-                const senderDomain = fromEmail.split('@')[1]?.toLowerCase();
                 if (senderDomain && spamDomains.has(senderDomain)) {
-                    if (!spamMap.has(fromEmail)) {
-                        spamMap.set(fromEmail, {
-                            email: fromEmail,
-                            name: senderName || fromEmail,
+                    if (!spamMap.has(safeSenderEmail)) {
+                        spamMap.set(safeSenderEmail, {
+                            email: safeSenderEmail,
+                            name: senderName || safeSenderEmail || 'Desconocido',
                             count: 0,
                             totalSize: 0,
                             ids: []
                         });
                     }
-                    const spamGroup = spamMap.get(fromEmail)!;
+                    const spamGroup = spamMap.get(safeSenderEmail)!;
                     spamGroup.count += 1;
                     spamGroup.totalSize += msgSize;
                     spamGroup.ids.push(uid);
