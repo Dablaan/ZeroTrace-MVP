@@ -26,6 +26,15 @@ interface HubDesuscripcion {
     sizeBytes: number;
 }
 
+interface SpamItem {
+    id: number;
+    email: string;
+    name: string;
+    subject: string;
+    date: string;
+    size: number;
+}
+
 async function getSpamDomains(): Promise<Set<string>> {
     try {
         const url = 'https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/master/disposable_email_blocklist.conf';
@@ -80,7 +89,7 @@ export async function POST(request: Request) {
         const lock = await client.getMailboxLock('INBOX');
 
         const spamDomains = await getSpamDomains();
-        const spamRadar: any[] = [];
+        const spamRadar: SpamItem[] = [];
 
         const remitentesMap = new Map<string, { count: number, uids: number[], sizeBytes: number }>();
         const pueblosFantasmasMap = new Map<number, PuebloFantasma>();

@@ -126,7 +126,8 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
         const sortedData = {
             clan: [...scanData.clan].sort((a, b) => b.count - a.count),
             pueblos: [...scanData.pueblos].sort((a, b) => b.sizeBytes - a.sizeBytes),
-            hub: [...scanData.hub].sort((a, b) => b.uids.length - a.uids.length)
+            hub: [...scanData.hub].sort((a, b) => b.uids.length - a.uids.length),
+            spamRadar: scanData.spamRadar ? [...scanData.spamRadar].sort((a, b) => b.size - a.size) : []
         };
         setLocalData(sortedData);
     }, [scanData]);
