@@ -26,6 +26,20 @@ interface HubDesuscripcion {
     sizeBytes: number;
 }
 
+async function getSpamDomains(): Promise<Set<string>> {
+    try {
+        const url = 'https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/master/disposable_email_blocklist.conf';
+        const res = await fetch(url, { next: { revalidate: 86400 } });
+        if (!res.ok) return new Set();
+        const text = await res.text();
+        const domains = text.split('\n').map(d => d.trim().toLowerCase()).filter(d => d.length > 0);
+        return new Set(domains);
+    } catch (error) {
+        console.error("Error fetching spam list:", error);
+        return new Set();
+    }
+}
+
 // Función auxiliara para procesar raw headers manualmente y optimizar CPU
 function extractHeader(headerText: string, key: string): string {
     const lines = headerText.split(/\r?\n/);
@@ -64,6 +78,9 @@ export async function POST(request: Request) {
 
         await client.connect();
         const lock = await client.getMailboxLock('INBOX');
+
+        const spamDomains = await getSpamDomains();
+        const spamRadar: any[] = [];
 
         const remitentesMap = new Map<string, { count: number, uids: number[], sizeBytes: number }>();
         const pueblosFantasmasMap = new Map<number, PuebloFantasma>();
@@ -153,6 +170,19 @@ export async function POST(request: Request) {
                     currentHub.sizeBytes += msgSize;
                     hubDesuscripcionMap.set(fromEmail, currentHub);
                 }
+
+                // 4. RADAR ANTI-SPAM: Detectar dominios temporales
+                const senderDomain = fromEmail.split('@')[1]?.toLowerCase();
+                if (senderDomain && spamDomains.has(senderDomain)) {
+                    spamRadar.push({
+                        id: uid,
+                        email: fromEmail,
+                        name: senderName || fromEmail,
+                        subject: subjectHeader || 'Sin asunto',
+                        date: dateHeader || new Date().toISOString(),
+                        size: msgSize || 0
+                    });
+                }
             }
         } finally {
             lock.release();
@@ -172,7 +202,7 @@ export async function POST(request: Request) {
 
         const hubArray: HubDesuscripcion[] = Array.from(hubDesuscripcionMap.values());
 
-        return NextResponse.json({ clan: clanArray, pueblos: pueblosArray, hub: hubArray });
+        return NextResponse.json({ clan: clanArray, pueblos: pueblosArray, hub: hubArray, spamRadar });
 
     } catch (error: unknown) {
         if (client) {

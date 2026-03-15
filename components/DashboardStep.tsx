@@ -26,10 +26,20 @@ interface HubDesuscripcion {
     sizeBytes: number;
 }
 
+export interface SpamItem {
+    id: number;
+    email: string;
+    name: string;
+    subject: string;
+    date: string;
+    size: number;
+}
+
 export interface ScanData {
     clan: ClanRemitente[];
     pueblos: PuebloFantasma[];
     hub: HubDesuscripcion[];
+    spamRadar: SpamItem[];
 }
 
 import { getProviderConfig } from "./AuthStep";
@@ -186,6 +196,9 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             } else if (id.startsWith("hub-")) {
                 const index = parseInt(id.split("-")[1], 10);
                 return acc + (localData.hub[index]?.sizeBytes || 0);
+            } else if (id.startsWith("spam-")) {
+                const index = parseInt(id.split("-")[1], 10);
+                return acc + (localData.spamRadar[index]?.size || 0);
             }
             return acc;
         }, 0);
@@ -202,6 +215,9 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             } else if (id.startsWith("hub-")) {
                 const index = parseInt(id.split("-")[1], 10);
                 if (localData.hub[index]) uidsToDelete.push(...localData.hub[index].uids);
+            } else if (id.startsWith("spam-")) {
+                const index = parseInt(id.split("-")[1], 10);
+                if (localData.spamRadar[index]) uidsToDelete.push(localData.spamRadar[index].id);
             }
         });
 
@@ -233,8 +249,9 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             const newClan = localData.clan.filter((item, index) => !selectedItems.includes(`clan-${index}`));
             const newPueblos = localData.pueblos.filter((item, index) => !selectedItems.includes(`pueblo-${index}`));
             const newHub = localData.hub.filter((item, index) => !selectedItems.includes(`hub-${index}`));
+            const newSpam = localData.spamRadar.filter((item, index) => !selectedItems.includes(`spam-${index}`));
 
-            setLocalData({ ...localData, clan: newClan, pueblos: newPueblos, hub: newHub });
+            setLocalData({ ...localData, clan: newClan, pueblos: newPueblos, hub: newHub, spamRadar: newSpam });
             setSelectedItems([]);
             setIsConfirmModalOpen(false);
 
@@ -270,7 +287,9 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             setTimeout(() => setDeleteSuccess(null), 5000);
         } catch (error) {
             console.error(error);
-            setToast("Error al intentar borrar correos.");
+            setToast(error instanceof Error ? error.message : "Error al escanear.");
+            setLocalData({ clan: [], pueblos: [], hub: [], spamRadar: [] });
+            onBack();
         } finally {
             setIsDeleting(false);
         }
@@ -280,7 +299,8 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
     const totalRemitentes = localData?.clan?.reduce((acc, curr) => acc + curr.count, 0) || 0;
     const totalFantasmas = localData?.pueblos?.length || 0;
     const totalDesuscripciones = localData?.hub?.length || 0;
-    const globalTotal = totalRemitentes + totalFantasmas + totalDesuscripciones;
+    const totalSpam = localData?.spamRadar?.length || 0;
+    const globalTotal = totalRemitentes + totalFantasmas + totalDesuscripciones + totalSpam;
 
     const { totalMails: totalSelectedMails, totalBytes: totalSelectedBytes } = selectedItems.reduce((acc, id) => {
         if (id.startsWith("clan-")) {
@@ -303,6 +323,13 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
             if (item) {
                 acc.totalMails += item.uids.length;
                 acc.totalBytes += item.sizeBytes;
+            }
+        } else if (id.startsWith("spam-")) {
+            const index = parseInt(id.split("-")[1], 10);
+            const item = localData.spamRadar[index];
+            if (item) {
+                acc.totalMails += 1;
+                acc.totalBytes += item.size;
             }
         }
         return acc;
@@ -575,6 +602,70 @@ export default function DashboardStep({ onBack, scanData, credentials, onRefresh
                                         );
                                     })}
                                 </div>
+                            </div>
+                        )}
+                    </details>
+
+                    {/* Panel 4: Radar Anti-Spam */}
+                    <details
+                        className="group bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl"
+                        open={openPanel === "spam"}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            handleTogglePanel("spam");
+                        }}
+                    >
+                        <summary className="flex items-center justify-between p-6 cursor-pointer list-none">
+                            <div className="flex items-center gap-4">
+                                <div className="size-10 rounded-2xl bg-rose-500/20 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-rose-500">shield</span>
+                                </div>
+                                <div className="flex flex-col flex-1">
+                                    <div className="flex items-center gap-2 relative group/tooltip w-fit">
+                                        <h3 className="text-lg font-bold text-white">Radar Anti-Spam 🛡️</h3>
+                                        <span className="material-symbols-outlined text-[16px] text-slate-500 cursor-help hover:text-rose-500 transition-colors">info</span>
+                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 w-48 p-2 bg-slate-800 border border-slate-700 text-xs text-slate-300 rounded-md z-[100] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none shadow-xl text-center">
+                                            Correos basura o temporales detectados automáticamente por nuestra base de datos colaborativa.
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-700"></div>
+                                        </div>
+                                    </div>
+                                    <span className="text-xs text-slate-400 font-normal">Correos desechables y phising</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="bg-teal-500/20 text-teal-300 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap">
+                                    {totalSpam} correos
+                                </span>
+                                <span className={`material-symbols-outlined text-slate-400 transition-transform ${openPanel === "spam" ? "rotate-180" : ""}`}>expand_more</span>
+                            </div>
+                        </summary>
+                        {openPanel === "spam" && (
+                            <div className="px-6 pb-6 pt-2 space-y-1">
+                                {localData?.spamRadar?.length === 0 && (
+                                    <p className="text-slate-400 text-sm py-2">No se encontró correo basura en tu bandeja.</p>
+                                )}
+                                {localData?.spamRadar?.map((item, index) => {
+                                    const id = `spam-${index}`;
+                                    return (
+                                        <label key={id} className="flex items-center justify-between py-4 border-t border-white/5 group/row cursor-pointer animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex flex-col flex-1 pr-4 min-w-0">
+                                                <span className="text-lg font-bold text-white whitespace-normal break-words">
+                                                    {item.name}
+                                                </span>
+                                                <span className="text-sm text-slate-400 whitespace-normal break-words">
+                                                    {item.email} • 1 correo - {formatBytes(item.size)}
+                                                </span>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedItems.includes(id)}
+                                                onChange={(e) => handleCheckboxChange(e, id)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="size-8 rounded-xl border-white/20 bg-white/5 text-primary focus:ring-primary focus:ring-offset-slate-900 cursor-pointer transition-all flex-shrink-0 ml-4"
+                                            />
+                                        </label>
+                                    );
+                                })}
                             </div>
                         )}
                     </details>
